@@ -70,8 +70,8 @@ def main(host, port, agent_card):
         client = httpx.AsyncClient()
         request_handler = DefaultRequestHandler(
             agent_executor=GenericAgentExecutor(agent=get_agent(agent_card)),
-            task_store=InMemoryTaskStore(),
-            push_notifier=InMemoryPushNotifier(client),
+            task_store=InMemoryTaskStore(), # in built memory store for tasks
+            push_notifier=InMemoryPushNotifier(client), # for auth etc
         )
 
         server = A2AStarletteApplication(

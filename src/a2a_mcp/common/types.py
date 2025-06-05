@@ -3,7 +3,7 @@
 from typing import Any, List, Literal, Optional, Union
 
 from pydantic import BaseModel, Field, model_validator
-
+from a2a.types import AgentCard
 
 class ServerConfig(BaseModel):
     """Server Confgiguration."""
@@ -114,3 +114,8 @@ class AgentResponse(BaseModel):
     require_user_input: bool = Field(
         description='Whether the agent requires user input.'
     )
+
+class CustomAgentCard(AgentCard):
+    modelName: str = None
+    systemPrompt: str = None
+    nextAgent: List[str] = []

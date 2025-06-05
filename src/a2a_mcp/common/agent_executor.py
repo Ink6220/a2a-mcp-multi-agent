@@ -65,10 +65,8 @@ class GenericAgentExecutor(AgentExecutor):
             require_user_input = item['require_user_input']
 
             if is_task_complete:
-                if item['response_type'] == 'data':
-                    part = DataPart(data=item['content'])
-                else:
-                    part = TextPart(text=item['content'])
+                # Always create a TextPart for the response content
+                part = TextPart(text=item['content'])
 
                 updater.add_artifact(
                     [part],

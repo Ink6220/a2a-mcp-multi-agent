@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
-from typing import Any, Dict, AsyncIterable, Literal
+from typing import Any, Dict, Literal, Union, AsyncGenerator
+from collections.abc import AsyncIterable
 from pydantic import BaseModel, Field
 from typing import Literal, Optional, List
 from a2a_mcp.common.types import CustomAgentCard
@@ -9,6 +10,7 @@ import time
 from colorama import Fore, Style, init
 
 class ResponseFormat(BaseModel):
+    # TODO: We might need to redo some stuff for the logic here, but for now, we will keep it as is.
     """Respond to the user in this format."""
 
     action: Literal["answer", "call_next_agent"] = Field(
@@ -51,25 +53,31 @@ class BaseAgent(ABC):
 
 
     @abstractmethod
-    async def invoke(self, instruction, query, session_id):
+    async def invoke(self, query: str, session_id: str) -> Dict[str, Any]:
+        """Invoke the agent with a query and return a single response."""
         pass
 
     @abstractmethod
-    async def stream(self, instruction, query, session_id):
+    async def stream(self, query: str, context_id: str, task_id: str) -> AsyncGenerator[Dict[str, Any], None]:
+        """Stream responses from the agent. Must yield dictionaries with standardized format."""
         pass
 
     @abstractmethod
-    def convert_tool_format(self, tools):
+    def convert_tool_format(self, tools) -> Any:
+        """Convert tools to the format expected by the specific agent implementation."""
         pass
 
     @abstractmethod
-    def parse_agent_response(self, response):
+    def parse_agent_response(self, response) -> Dict[str, Any]:
+        """Parse the agent's response into standardized format."""
         pass
 
     @abstractmethod
-    def parse_structure_output(self, text):
+    def parse_structure_output(self, text: str) -> Union[ResponseFormat, str]:
+        """Parse structured output from text."""
         pass
 
     @abstractmethod
-    def root_instruction(self, chat_history, tools, system_prompt=None):
+    def root_instruction(self, chat_history: str, tools: Any = None, agent_info: Any = None) -> str:
+        """Generate the root instruction for the agent."""
         pass

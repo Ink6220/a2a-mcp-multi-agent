@@ -1,4 +1,4 @@
-from base_agent.base_agent import BaseAgent, ResponseFormat
+from a2a_mcp.common.base_agent.base_agent import BaseAgent, ResponseFormat
 from a2a_mcp.common.prompts import A2A_NOVA_BASE_PROMPT
 import boto3
 import json

@@ -1,4 +1,4 @@
-from base_agent.base_agent import BaseAgent, ResponseFormat
+from a2a_mcp.common.base_agent.base_agent import BaseAgent, ResponseFormat
 from a2a_mcp.common.prompts import A2A_OPENAI_NATIVE_BASE_PROMPT
 from agents import Agent, ModelSettings, Runner, ItemHelpers
 from openai.types.responses import ResponseTextDeltaEvent, ResponseFunctionToolCall, ResponseOutputMessage, ResponseOutputItemAddedEvent, ResponseFunctionCallArgumentsDeltaEvent

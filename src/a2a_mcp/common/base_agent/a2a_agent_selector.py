@@ -1,10 +1,10 @@
 from a2a_mcp.common.base_agent.a2a_nova_agent import A2ANovaAgent
 from a2a_mcp.common.base_agent.a2a_openai_agent import A2AOpenaiAgent
 from a2a_mcp.common.base_agent.a2a_openai_agent_native import A2AOpenaiAgentNative
-from common.types import AgentCard
+from a2a_mcp.common.types import CustomAgentCard
 
 class A2AAgentSelector:
-    def __init__(self, agent_card: AgentCard, mcp_server: list=[]):
+    def __init__(self, agent_card: CustomAgentCard, mcp_server: list=[]):
         self.provider = agent_card.provider.organization
         self.agent_card = agent_card
         self.mcp_server = mcp_server

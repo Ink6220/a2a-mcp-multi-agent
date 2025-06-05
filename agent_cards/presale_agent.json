@@ -1,0 +1,49 @@
+{
+    "name": "Presale Agent",
+    "description": "Initiate contact, qualify customer availability. Only call this agent to ask for availability only, otherwise call other agent. Input format: {{user_question}}",
+    "url": "http://localhost:10001/",
+    "provider": {
+        "organization": "openai",
+        "url":"None"
+    },
+    "version": "1.0.0",
+    "documentationUrl": null,
+    "capabilities": {
+        "streaming": "True",
+        "pushNotifications": "True",
+        "stateTransitionHistory": "False"
+    },
+    "authentication": {
+        "credentials": null,
+        "schemes": [
+            "public"
+        ]
+    },
+    "defaultInputModes": [
+        "text",
+        "text/plain"
+    ],
+    "defaultOutputModes": [
+        "text",
+        "text/plain"
+    ],
+    "skills": [
+        {
+            "id": "greet_and_introduce",
+            "name": "Greet and introduce the promotion",
+            "description": "Helps Initiate contact to customer and qualify customer availability.",
+            "tags": [
+                "Greeting",
+                "Asking customer availability"
+            ],
+            "examples": [
+                "สวัสดี"
+            ],
+            "inputModes": null,
+            "outputModes": null
+        }
+    ],
+    "modelName":"gpt-4.1-mini",
+    "systemPrompt": "",
+    "nextAgent": []
+}

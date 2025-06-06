@@ -1,6 +1,8 @@
 from agents.mcp import MCPServerSse
 import time
 from colorama import Fore, Style, init
+import mcp.types as types
+from mcp import ClientSession
 
 class FilteredMCPServerSse(MCPServerSse):
     """MCP server implementation that extends MCPServerSse with tool filtering capabilities.
@@ -70,3 +72,16 @@ class FilteredMCPServerSse(MCPServerSse):
         filtered_tools = self.filter_tools(unfiltered_tools)
         print(Fore.YELLOW + Style.BRIGHT + "Time fetching tools:" + Style.RESET_ALL, time.time() - start_time)
         return filtered_tools
+    
+    async def find_resource(self, resource) -> types.ReadResourceResult:
+        """Reads a resource from the connected MCP server.
+
+        Args:
+            session: The active ClientSession.
+            resource: The URI of the resource to read (e.g., 'resource://agent_cards/list').
+
+        Returns:
+            The result of the resource read operation.
+        """
+        print(f'Reading resource: {resource}')
+        return await self.session.read_resource(resource)

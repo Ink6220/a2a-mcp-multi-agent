@@ -51,7 +51,8 @@ async def init_agent_server(host, port, agent_card, mcp_url, include_tools, excl
         },
     ) as mcp_server:
         logger.info(f"MCP server initialized and connected to {mcp_url}")
-        
+        agent_card_list = await mcp_server.find_resource("resource://agent_cards/list")
+        print(json.loads(agent_card_list.contents[0].text))
         client = httpx.AsyncClient()
         request_handler = DefaultRequestHandler(
             agent_executor=GenericAgentExecutor(agent=get_agent(agent_card, mcp_server)),

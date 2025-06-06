@@ -4,6 +4,7 @@ from collections.abc import AsyncIterable
 from pydantic import BaseModel, Field
 from typing import Literal, Optional, List
 from a2a_mcp.common.types import CustomAgentCard
+from a2a_mcp.common.card_discovery import A2ACardDiscovery
 import json
 import uuid
 import time
@@ -31,7 +32,7 @@ class ResponseFormat(BaseModel):
     )
 
 class BaseAgent(ABC):
-    def __init__(self, model_name: str, agent_card: CustomAgentCard):
+    def __init__(self, model_name: str, agent_card: CustomAgentCard, card_discovery: A2ACardDiscovery):
         self.model_name = model_name
         self.agent_card: CustomAgentCard = agent_card
 
@@ -39,8 +40,9 @@ class BaseAgent(ABC):
         # The cache is always dirty at startup, so that we discovery at least once
         # self._cache_dirty = True
         # self.remote_agent_connections: dict[str, RemoteAgentConnections] = {}
-        # self.cards: dict[str, AgentCard] = {}
+        # self.cards: dict[str, CustomAgentCard] = {}
         # self.agent_info: str | None = None
+        self.card_discovery = card_discovery
 
         self.model_config = {
             'arbitrary_types_allowed': True,

@@ -98,7 +98,7 @@ def serve(host, port, transport):  # noqa: PLR0915
     mcp = FastMCP('agent-cards', host=host, port=port)
 
     df = build_agent_card_dataframe()
-
+    print(df)
     @mcp.tool()
     def save_log_customer(callback_date: str, phone: str, status: str) -> str:
         """This tool is for recording the date, status, and phone number of customers. Use this tool whenever you need to record history for staff to follow up later or confirm their interest in insurance products.
@@ -244,13 +244,14 @@ def serve(host, port, transport):  # noqa: PLR0915
         the URI 'resource://agent_cards/list'.
 
         Returns:
-            A json / dictionary structured as {'agent_cards': [...]}, where the value is a
-            list containing all the loaded agent card dictionaries. Returns
-            {'agent_cards': []} if the data cannot be retrieved.
+            A json / dictionary structured as {'agent_card_urls': [...], 'agent_cards': [...]}, where the value is a
+            list containing all the loaded agent card dictionaries and urls. Returns
+            {'agent_card_urls': [], 'agent_cards': []} if the data cannot be retrieved.
         """
         resources = {}
         logger.info('Starting read resources')
-        resources['agent_cards'] = df['card_uri'].to_list()
+        resources['agent_card_urls'] = df['card_uri'].to_list()
+        resources['agent_cards'] = df['agent_card'].to_list()
         return resources
 
     @mcp.resource(

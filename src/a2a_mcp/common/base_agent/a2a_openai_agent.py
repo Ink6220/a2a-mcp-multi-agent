@@ -7,7 +7,8 @@ import json
 import re
 import xml.etree.ElementTree as ET
 import os
-from typing import Any, Dict, AsyncIterable, Literal
+from typing import Any, Dict, Literal, Union, AsyncGenerator
+from collections.abc import AsyncIterable
 from dotenv import load_dotenv
 load_dotenv()
 import logging
@@ -40,7 +41,9 @@ class A2AOpenaiAgent(BaseAgent):
             model_settings=ModelSettings(temperature=0.0)
         )
          
-    async def invoke(self, query, session_id):
+    async def invoke(self, query: str, session_id: str) -> Dict[str, Any]:
+        # TODO: maybe we should go through together on invoke(), if we are going to change response format etc (im not too clear on this)
+        result = None
         try:
             history = "" # TODO: Load Memory
             agent_info = "" # TODO: Add agent discovery information
@@ -56,10 +59,28 @@ class A2AOpenaiAgent(BaseAgent):
         except OpenAIError as e:
             traceback.print_exc()
             print(e)
+            return {
+                "is_task_complete": False,
+                "require_user_input": True,
+                "content": "We are unable to process your request at the moment. Please try again.",
+                "hang_up": False,
+                "call_next_agent": False,
+                "agent_name": ""
+            }
+
+        if result is None:
+            return {
+                "is_task_complete": False,
+                "require_user_input": True,
+                "content": "We are unable to process your request at the moment. Please try again.",
+                "hang_up": False,
+                "call_next_agent": False,
+                "agent_name": ""
+            }
 
         return self.parse_agent_response(result.final_output)
 
-    async def stream(self, query, sessionId) -> AsyncIterable[Dict[str, Any]]:
+    async def stream(self, query: str, context_id: str, task_id: str) -> AsyncGenerator[Dict[str, Any], None]:
 
         history = "" # TODO: Load Memory
         agent_info = "" # TODO: Add agent discovery information
@@ -77,7 +98,7 @@ class A2AOpenaiAgent(BaseAgent):
                 # Found first json object --is-> Generate complete
                 # Sometimes there is a chance that it generate duplicate answer {"status": ..., "message": ...}{"status": ..., "message": ...}
                 first_json = self.parse_structure_output(raw_json_chunks)
-                if first_json!= "":
+                if isinstance(first_json, str) and first_json != "":
                     print(f"\nExtracted {raw_json_chunks} -> {first_json}\n")
                     raw_json_chunks = first_json
                     break
@@ -115,17 +136,27 @@ class A2AOpenaiAgent(BaseAgent):
                 if event.item.type == "tool_call_item":
                     print("-- Tool was called")
                     response_function_tool_call = event.item.raw_item
-                    arguments = response_function_tool_call.arguments
-                    call_id = response_function_tool_call.call_id
-                    tool_name = response_function_tool_call.name
-                    tool_status = response_function_tool_call.status
+                    # Safely access attributes that might not exist on all tool call types (returns none if attribute doesnt exist )
+                    arguments = getattr(response_function_tool_call, 'arguments', None)
+                    call_id = getattr(response_function_tool_call, 'call_id', None)
+                    tool_name = getattr(response_function_tool_call, 'name', None)
+                    tool_status = getattr(response_function_tool_call, 'status', None)
 
                     print(arguments, call_id, tool_name, tool_status)
                 elif event.item.type == "tool_call_output_item":
                     print(f"-- Tool output: {event.item.output}")
                     raw_item = event.item.raw_item
-                    call_id = raw_item['call_id']
-                    output = json.loads(raw_item['output'])['text']
+                    call_id = raw_item.get('call_id') if isinstance(raw_item, dict) else None # improves type safety
+                    if isinstance(raw_item, dict) and 'output' in raw_item:
+                        try:
+                            output_value = raw_item['output']
+                            # Ensure we have a string for json.loads
+                            if isinstance(output_value, str):
+                                output = json.loads(output_value)['text']
+                            else:
+                                output = str(output_value)
+                        except (json.JSONDecodeError, KeyError):
+                            output = str(raw_item['output'])
 
                 elif event.item.type == "message_output_item":
                     print(f"-- Message output:\n {ItemHelpers.text_message_output(event.item)}")
@@ -134,7 +165,14 @@ class A2AOpenaiAgent(BaseAgent):
         
         # At the end, parse the complete response to get the final status
         try:
-            parsed_response = json.loads(raw_json_chunks)
+            # First try to get a valid JSON string from parse_structure_output
+            structured_output = self.parse_structure_output(raw_json_chunks)
+            if isinstance(structured_output, str) and structured_output: #type safety check
+                parsed_response = json.loads(structured_output)
+            else:
+                # Fallback to parsing raw_json_chunks directly
+                parsed_response = json.loads(raw_json_chunks)
+                
             print("parsed_response => ", parsed_response)
             action = parsed_response.get("action", "answer")
             status = parsed_response.get("status", "input_required")
@@ -190,7 +228,7 @@ class A2AOpenaiAgent(BaseAgent):
         # Remove escaping of quotes that might be in the actual message content
         return chunk.replace('\\"', '"').replace('"', "")
 
-    def parse_structure_output(self, s: str) -> ResponseFormat:
+    def parse_structure_output(self, text: str) -> Union[ResponseFormat, str]: # im not too sure about what is going on here to be honest, this should allow both return types
         """
         Input:
             '{"model":"Mazda CX-5","brand":"Mazda"}{"model":"Mazda CX-5","brand":"Mazda"}' -> '{"model":"Mazda CX-5","brand":"Mazda"}'
@@ -200,7 +238,7 @@ class A2AOpenaiAgent(BaseAgent):
         open_brace_count = 0
         start_index = -1
 
-        for i, char in enumerate(s):
+        for i, char in enumerate(text):
             if char == '{':
                 if open_brace_count == 0:
                     start_index = i
@@ -208,10 +246,10 @@ class A2AOpenaiAgent(BaseAgent):
             elif char == '}':
                 open_brace_count -= 1
                 if open_brace_count == 0 and start_index != -1:
-                    return s[start_index:i+1]
+                    return text[start_index:i+1]
         return ""
 
-    def convert_tool_format(self, tools):
+    def convert_tool_format(self, tools) -> Any:
         pass
 
     def parse_agent_response(self, response):
@@ -270,6 +308,6 @@ class A2AOpenaiAgent(BaseAgent):
             "content": "We are unable to process your request at the moment. Please try again.",
         }
 
-    def root_instruction(self, chat_history, tools=None, agent_info=None):
+    def root_instruction(self, chat_history: str, tools: Any = None, agent_info: Any = None) -> str:
         prompt = self.agent_card.systemPrompt or "You are a helpful assistant."
         return A2A_OPENAI_BASE_PROMPT.format(system_prompt=prompt, chat_history=chat_history, agent_info=agent_info)

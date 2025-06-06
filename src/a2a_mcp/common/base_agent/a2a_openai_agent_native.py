@@ -14,6 +14,7 @@ import logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 from a2a_mcp.common.types import CustomAgentCard
+from a2a_mcp.common.card_discovery import A2ACardDiscovery
 import traceback
 import time
 from colorama import Fore, Style, init
@@ -21,8 +22,8 @@ from openai import OpenAI, AsyncOpenAI
 
 
 class A2AOpenaiAgentNative(BaseAgent):
-    def __init__(self, agent_card: CustomAgentCard, mcp_server: list=[]):
-        super().__init__(agent_card.modelName, agent_card)  # Call BaseAgent's __init__
+    def __init__(self, agent_card: CustomAgentCard, card_discovery: A2ACardDiscovery, mcp_server: list=[]):
+        super().__init__(agent_card.modelName, agent_card, card_discovery)  # Call BaseAgent's __init__
 
         self.mcp_server = mcp_server
         self.agent = None
@@ -46,7 +47,7 @@ class A2AOpenaiAgentNative(BaseAgent):
     async def invoke(self, query, session_id):
         try:
             history = "" # TODO: Load Memory
-            agent_info = "" # TODO: Add agent discovery information
+            agent_info = self.card_discovery.get_remote_agent_info() # TODO: Add agent discovery information
             inst = self.root_instruction(chat_history=history, agent_info=agent_info)
             session = self.mcp_server[0]
             tools_result = await session.list_tools()
@@ -105,7 +106,7 @@ class A2AOpenaiAgentNative(BaseAgent):
     async def stream(self, query, sessionId) -> AsyncIterable[Dict[str, Any]]:
 
         history = "" # TODO: Load Memory
-        agent_info = "" # TODO: Add agent discovery information
+        agent_info = self.card_discovery.get_remote_agent_info() # TODO: Add agent discovery information
         inst = self.root_instruction(chat_history=history, agent_info=agent_info)
         session = self.mcp_server[0]
         tools_result = await session.list_tools()

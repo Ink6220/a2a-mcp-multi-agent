@@ -19,24 +19,25 @@ from a2a_mcp.common.types import CustomAgentCard
 from a2a_mcp.common.agent_executor import GenericAgentExecutor
 from a2a_mcp.common.base_agent.a2a_agent_selector import A2AAgentSelector
 from a2a_mcp.common.base_mcp.filtered_mcp_server_sse import FilteredMCPServerSse
+from a2a_mcp.common.card_discovery import A2ACardDiscovery
 
 logger = logging.getLogger(__name__)
 
 def run_uvicorn(server: A2AStarletteApplication, host="127.0.0.1", port=8000):
     uvicorn.run(server.build(), host=host, port=port)
 
-def get_agent(agent_card: CustomAgentCard, mcp_server: FilteredMCPServerSse):
+def get_agent(agent_card: CustomAgentCard, card_discovery: A2ACardDiscovery, mcp_server: FilteredMCPServerSse):
     """Get the agent, given an agent card."""
     try:
         # TODO: add systemprompt instruction into agent_card based on agent name, due to load agent card from .json -> cannot directly passing prompt and connot write multiple line of string into systemPrompt.
-        return A2AAgentSelector(agent_card=agent_card, mcp_server=[mcp_server]).get_agent()
+        return A2AAgentSelector(agent_card=agent_card, card_discovery=card_discovery, mcp_server=[mcp_server]).get_agent()
     except Exception as e:
         raise e
 
 async def init_agent_server(host, port, agent_card, mcp_url, include_tools, exclude_tools):
     """Initialize and start the agent server with MCP connection"""
     
-    with Path.open(agent_card) as file:
+    with Path(agent_card).open(encoding='utf-8') as file:
         data = json.load(file)
     agent_card = CustomAgentCard(**data)
 
@@ -51,11 +52,15 @@ async def init_agent_server(host, port, agent_card, mcp_url, include_tools, excl
         },
     ) as mcp_server:
         logger.info(f"MCP server initialized and connected to {mcp_url}")
-        agent_card_list = await mcp_server.find_resource("resource://agent_cards/list")
-        print(json.loads(agent_card_list.contents[0].text))
+        a2a_card_discovery = A2ACardDiscovery(agent_card)
+        agent_cards, agent_info = await a2a_card_discovery.discovery_agent_card(mcp_server)
+
+        print("Discover:")
+        print(a2a_card_discovery.get_remote_agent_info())
+
         client = httpx.AsyncClient()
         request_handler = DefaultRequestHandler(
-            agent_executor=GenericAgentExecutor(agent=get_agent(agent_card, mcp_server)),
+            agent_executor=GenericAgentExecutor(agent=get_agent(agent_card, a2a_card_discovery, mcp_server)),
             task_store=InMemoryTaskStore(),
             push_notifier=InMemoryPushNotifier(client),
         )

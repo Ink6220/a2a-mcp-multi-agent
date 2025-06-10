@@ -49,8 +49,8 @@ class ResponseFormat(BaseModel):
         description="Message content, passed to the next agent as an instruction TODO"
     )
     
-    next_agent_schema: Optional[Dict[str, Any]] = Field(
-        None,
+    next_agent_schema: Optional[str] = Field(
+        ...,
         description="Schema-compatible dictionary containing input data for the next agent, if applicable."
     )
 

@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 from typing import Any, Dict, Literal, Union, AsyncGenerator
 from collections.abc import AsyncIterable
 from pydantic import BaseModel, Field
-from typing import Literal, Optional, List
+from typing import Literal, Optional, List, Dict, Any
 from a2a_mcp.common.types import CustomAgentCard
 from a2a_mcp.common.card_discovery import A2ACardDiscovery
 import json
@@ -11,24 +11,40 @@ import time
 from colorama import Fore, Style, init
 
 class ResponseFormat(BaseModel):
-    # TODO: We might need to redo some stuff for the logic here, but for now, we will keep it as is.
-    """Respond to the user in this format."""
-
+    """Standardized response for LLM Agent interactions."""
+    
     action: Literal["answer", "call_next_agent"] = Field(
         ...,
-        description="Action to be taken, either respond directly or delegate to another agent."
+        description="Primary action: either respond to the user or delegate to the next agent."
     )
-    status: Literal["input_required", "completed","hang_up"] = Field(
+    
+    status: Literal["input_required", "completed", "failed"] = Field(
         ...,
-        description="The current status of the conversation flow."
+        description="System-defined flow status. Indicates if the task is complete, requires input, or has failed."
     )
-    agent_name: str = Field(
-        ...,
-        description="Name of the agent responsible for the current response, if action is call_next_agent."
+    
+    custom_status: Optional[str] = Field(
+        None,
+        description="Optional custom state such as 'hang_up', 'timeout', etc. for extended flow semantics."
     )
+    
     message: str = Field(
         ...,
-        description="The message to deliver to the user or to another agent."
+        description="Message content, passed to the user for answering or asking."
+    )
+    next_agent_instruction: str = Field(
+        ...,
+        description="Message content, passed to the next agent as an instruction TODO"
+    )
+    
+    agent_name: Optional[str] = Field(
+        None,
+        description="Name of the agent to call, required if action is 'call_next_agent'."
+    )
+    
+    next_agent_schema: Optional[Dict[str, Any]] = Field(
+        None,
+        description="Schema-compatible dictionary containing input data for the next agent, if applicable."
     )
 
 class BaseAgent(ABC):

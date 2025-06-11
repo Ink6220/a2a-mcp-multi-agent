@@ -106,7 +106,7 @@ async def init_agent_server(host, port, agent_card, mcp_url, include_tools, excl
 @click.option(
     "--include-tools",
     multiple=True,
-    default=("save_log_customer", "check_car_brand", "data_car_insurance_2", "data_other_insurance"),
+    default=("save_log_customer",),
     help="List of tool names to include (allowlist)."
 )
 @click.option(

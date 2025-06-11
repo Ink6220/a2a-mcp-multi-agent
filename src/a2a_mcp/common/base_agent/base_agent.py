@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
-from typing import Any, Dict, Literal, Union, AsyncGenerator
+from typing import Any, Dict, Literal, Union, AsyncGenerator, Self
 from collections.abc import AsyncIterable
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 from typing import Literal, Optional, List, Dict, Any
 from a2a_mcp.common.types import CustomAgentCard
 from a2a_mcp.common.card_discovery import A2ACardDiscovery
@@ -9,6 +9,9 @@ import json
 import uuid
 import time
 from colorama import Fore, Style, init
+
+from pydantic import BaseModel, Field, ValidationError, model_validator
+from typing import Literal, Optional, Dict, Any
 
 class ResponseFormat(BaseModel):
     """Standardized response for LLM Agent interactions."""
@@ -18,6 +21,7 @@ class ResponseFormat(BaseModel):
         description="Primary action: either respond to the user or delegate to the next agent."
     )
     
+    # As needed per A2A protocol
     status: Literal["input_required", "completed", "failed"] = Field(
         ...,
         description="System-defined flow status. Indicates if the task is complete, requires input, or has failed."
@@ -28,24 +32,36 @@ class ResponseFormat(BaseModel):
         description="Optional custom state such as 'hang_up', 'timeout', etc. for extended flow semantics."
     )
     
+    # A2A protocol text fields, message is required, other parts depend on action
+
     message: str = Field(
         ...,
         description="Message content, passed to the user for answering or asking."
     )
-    next_agent_instruction: str = Field(
-        ...,
-        description="Message content, passed to the next agent as an instruction TODO"
-    )
-    
+
     agent_name: Optional[str] = Field(
         None,
         description="Name of the agent to call, required if action is 'call_next_agent'."
     )
-    
-    next_agent_schema: Optional[Dict[str, Any]] = Field(
+
+    next_agent_instruction: Optional[str] = Field(
         None,
+        description="Message content, passed to the next agent as an instruction TODO"
+    )
+    
+    next_agent_schema: Optional[str] = Field(
+        ...,
         description="Schema-compatible dictionary containing input data for the next agent, if applicable."
     )
+
+    @model_validator(mode="after")
+    def validate_required_fields(self) -> Self:
+        if self.action == "call_next_agent":
+            if not self.agent_name:
+                raise ValueError("`agent_name` is required when action is 'call_next_agent'")
+            if not self.next_agent_instruction:
+                raise ValueError("`next_agent_instruction` is required when action is 'call_next_agent'")
+        return self
 
 class BaseAgent(ABC):
     def __init__(self, model_name: str, agent_card: CustomAgentCard, card_discovery: A2ACardDiscovery):

@@ -64,6 +64,7 @@ class A2AOpenaiAgent(BaseAgent):
                 yield result.final_output
             except ValidationError as ve:
                 print("Validation error while formatting response:", ve)
+                # TODO: Refactor invoke() to return response_object instead of yielding it
                 yield ResponseFormat(
                     action="answer",
                     status="failed",
@@ -77,6 +78,7 @@ class A2AOpenaiAgent(BaseAgent):
         except OpenAIError as e:
             traceback.print_exc()
             print(e)
+            # TODO: Refactor invoke() to return response_object instead of yielding it
             yield ResponseFormat(
                 action="answer",
                 status="input_required",

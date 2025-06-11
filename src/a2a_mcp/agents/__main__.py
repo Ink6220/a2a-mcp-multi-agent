@@ -21,6 +21,10 @@ from a2a_mcp.common.base_agent.a2a_agent_selector import A2AAgentSelector
 from a2a_mcp.common.base_mcp.filtered_mcp_server_sse import FilteredMCPServerSse
 from a2a_mcp.common.card_discovery import A2ACardDiscovery
 
+import os
+from dotenv import load_dotenv
+load_dotenv(".env")
+
 logger = logging.getLogger(__name__)
 
 def run_uvicorn(server: A2AStarletteApplication, host="127.0.0.1", port=8000):

@@ -23,8 +23,8 @@ class ResponseFormat(BaseModel):
         description="System-defined flow status. Indicates if the task is complete, requires input, or has failed."
     )
     
-    custom_status: Optional[str] = Field(
-        None,
+    custom_status: str = Field(
+        ...,
         description="Optional custom state such as 'hang_up', 'timeout', etc. for extended flow semantics."
     )
     
@@ -37,13 +37,13 @@ class ResponseFormat(BaseModel):
         description="Message content, passed to the next agent as an instruction TODO"
     )
     
-    agent_name: Optional[str] = Field(
-        None,
+    agent_name: str = Field(
+        ...,
         description="Name of the agent to call, required if action is 'call_next_agent'."
     )
     
-    next_agent_schema: Optional[Dict[str, Any]] = Field(
-        None,
+    next_agent_schema: str = Field(
+        ...,
         description="Schema-compatible dictionary containing input data for the next agent, if applicable."
     )
 
@@ -71,7 +71,7 @@ class BaseAgent(ABC):
 
 
     @abstractmethod
-    async def invoke(self, query: str, session_id: str) -> Dict[str, Any]:
+    async def invoke(self, query: str, context_id: str, task_id: str) -> Dict[str, Any]:
         """Invoke the agent with a query and return a single response."""
         pass
 

@@ -47,7 +47,8 @@ class GenericAgentExecutor(AgentExecutor):
 
         updater = TaskUpdater(event_queue, task.id, task.contextId)
 
-        async for item in self.agent.stream(query, task.contextId, task.id):
+        # TODO: Implement agent.stream() later
+        async for item in self.agent.invoke(query, task.contextId, task.id):
             # Agent to Agent call will return events,
             # Update the relevant ids to proxy back.
             if hasattr(item, 'root') and isinstance(
@@ -60,7 +61,8 @@ class GenericAgentExecutor(AgentExecutor):
                 ):
                     event_queue.enqueue_event(event)
                 continue
-
+            
+            print("item", item)
             is_task_complete = item['is_task_complete']
             require_user_input = item['require_user_input']
 

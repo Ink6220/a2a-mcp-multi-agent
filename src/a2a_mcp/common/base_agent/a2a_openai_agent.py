@@ -39,17 +39,18 @@ class A2AOpenaiAgent(BaseAgent):
             model=self.model_name,
             mcp_servers=self.mcp_server,
             output_type=ResponseFormat,
-            model_settings=ModelSettings(temperature=0.0)
+            model_settings=ModelSettings(temperature=0.0),
+            
         )
          
-    async def invoke(self, query: str, session_id: str) -> Dict[str, Any]:
+    async def invoke(self, query: str, context_id: str, task_id: str) -> Dict[str, Any]:
         # TODO: maybe we should go through together on invoke(), if we are going to change response format etc (im not too clear on this)
         result = None
         try:
             history = "" # TODO: Load Memory
             agent_info = self.card_discovery.get_remote_agent_info() # TODO: Add agent discovery information
             self.agent = self.get_agent(history, agent_info)
-
+            print(Fore.GREEN + Style.BRIGHT + "Init agent complete" + Style.RESET_ALL)
             start_time = time.time()
             result = await Runner.run(self.agent, query)
             print(Fore.GREEN + Style.BRIGHT + "[Runner.run]:" + Style.RESET_ALL, time.time() - start_time)
@@ -60,26 +61,18 @@ class A2AOpenaiAgent(BaseAgent):
         except OpenAIError as e:
             traceback.print_exc()
             print(e)
-            return {
+            yield {
                 "is_task_complete": False,
                 "require_user_input": True,
                 "content": "We are unable to process your request at the moment. Please try again.",
                 "hang_up": False,
                 "call_next_agent": False,
-                "agent_name": ""
+                "agent_name": "",
+                "next_agent_instruction": "",
+                "next_agent_schema": {}
             }
 
-        if result is None:
-            return {
-                "is_task_complete": False,
-                "require_user_input": True,
-                "content": "We are unable to process your request at the moment. Please try again.",
-                "hang_up": False,
-                "call_next_agent": False,
-                "agent_name": ""
-            }
-
-        return self.parse_agent_response(result.final_output)
+        yield self.parse_agent_response(result.final_output)
 
     async def stream(self, query: str, context_id: str, task_id: str) -> AsyncGenerator[Dict[str, Any], None]:
 
@@ -253,7 +246,7 @@ class A2AOpenaiAgent(BaseAgent):
     def convert_tool_format(self, tools) -> Any:
         pass
 
-    def parse_agent_response(self, response):
+    def parse_agent_response(self, response: ResponseFormat):
         if response and isinstance(response, ResponseFormat): 
             # print("[Presale]: ", response.status)
             if response.action == 'answer':
@@ -262,53 +255,58 @@ class A2AOpenaiAgent(BaseAgent):
                         "is_task_complete": False,
                         "require_user_input": True,
                         "content": response.message,
-                        "hang_up": False,
+                        
+                        "hang_up": response.custom_status == "hang_up",
                         "call_next_agent": False,
-                        "agent_name": ""
+                        "agent_name": "",
+                        "next_agent_instruction": "",
+                        "next_agent_schema": {}
                     }
-                elif response.status == "error":
+                elif response.status == "failed":
                     return {
                         "is_task_complete": False,
                         "require_user_input": True,
                         "content": response.message,
-                        "hang_up": False,
+                        "hang_up": response.custom_status == "hang_up",
                         "call_next_agent": False,
-                        "agent_name": ""
+                        "agent_name": "",
+                        "next_agent_instruction": "",
+                        "next_agent_schema": {}
                     }
                 elif response.status == "completed":
                     return {
                         "is_task_complete": True,
                         "require_user_input": False,
                         "content": response.message,
-                        "hang_up": False,
+                        "hang_up": response.custom_status == "hang_up",
                         "call_next_agent": False,
-                        "agent_name": ""
-                    }
-                elif response.status == "hang_up":
-                    return {
-                        "is_task_complete": True,
-                        "require_user_input": False,
-                        "content": response.message,
-                        "hang_up": True,
-                        "call_next_agent": False,
-                        "agent_name": ""
+                        "agent_name": "",
+                        "next_agent_instruction": "",
+                        "next_agent_schema": {}
                     }
             elif response.action == 'call_next_agent':
                 return {
-                    "is_task_complete": True,
-                    "require_user_input": False,
+                    "is_task_complete": response.status == "completed",
+                    "require_user_input": response.status == "input_required",
                     "content": response.message,
                     "hang_up": False,
                     "call_next_agent": True,
-                    "agent_name": response.agent_name
+                    "agent_name": response.agent_name,
+                    "next_agent_instruction": response.next_agent_instruction,
+                    "next_agent_schema": response.next_agent_schema
                 }
 
         return {
             "is_task_complete": False,
             "require_user_input": True,
             "content": "We are unable to process your request at the moment. Please try again.",
+            "hang_up": False,
+            "call_next_agent": False,
+            "agent_name": "",
+            "next_agent_instruction": "",
+            "next_agent_schema": {}
         }
-
+    
     def root_instruction(self, chat_history: str, tools: Any = None, agent_info: Any = None) -> str:
         prompt = self.agent_card.systemPrompt or "You are a helpful assistant."
         return A2A_OPENAI_BASE_PROMPT.format(system_prompt=prompt, chat_history=chat_history, agent_info=agent_info)

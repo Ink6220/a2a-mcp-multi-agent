@@ -2,7 +2,10 @@
     "name": "Orchestrator Agent",
     "description": "Orchestrates the task generation and execution",
     "url": "http://localhost:10101/",
-    "provider": null,
+    "provider": {
+        "organization": "openai",
+        "url":"None"
+    },
     "version": "1.0.0",
     "documentationUrl": null,
     "capabilities": {
@@ -38,5 +41,8 @@
             "inputModes": null,
             "outputModes": null
         }
-    ]
+    ],
+    "modelName":"gpt-4.1-mini",
+    "systemPrompt": "",
+    "nextAgent": ["http://localhost:10002/", "http://localhost:10001/"]
 }

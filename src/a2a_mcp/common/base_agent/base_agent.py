@@ -27,8 +27,8 @@ class ResponseFormat(BaseModel):
         description="System-defined flow status. Indicates if the task is complete, requires input, or has failed."
     )
     
-    custom_status: Optional[str] = Field(
-        None,
+    custom_status: str = Field(
+        ...,
         description="Optional custom state such as 'hang_up', 'timeout', etc. for extended flow semantics."
     )
     
@@ -87,7 +87,7 @@ class BaseAgent(ABC):
 
 
     @abstractmethod
-    async def invoke(self, query: str, session_id: str) -> Dict[str, Any]:
+    async def invoke(self, query: str, context_id: str, task_id: str) -> Dict[str, Any]:
         """Invoke the agent with a query and return a single response."""
         pass
 

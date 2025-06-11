@@ -25,7 +25,15 @@ dependencies = [
     "openai>=1.0.0",
     "openai-agents>=0.0.11",
     "pandas>=2.2.3",
-    "pydantic>=2.11.4"
+    "pydantic>=2.11.4",
+    "pyjwt>=2.10.1",
+    "jwcrypto>=1.5.6",
+]
+
+[tool.uv.workspace]
+members = [
+    "hosts/cli",
+    "hosts/multiagent",
 ]
 
 [project.scripts]

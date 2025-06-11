@@ -25,8 +25,8 @@ uv pip install -e .
 ### Running the MCP Server
 
 ```bash
-# Start MCP server (default port 10100)
-uv run a2a-mcp --run mcp-server --transport sse
+# Start MCP server (default port 8000)
+uv run a2a-mcp --run temp-mcp-server --transport sse
 ```
 
 ### Running Agents
@@ -35,8 +35,17 @@ uv run a2a-mcp --run mcp-server --transport sse
 # Start orchestrator agent
 uv run src/a2a_mcp/agents/ --agent-card agent_cards/orchestrator_agent.json --port 10101
 
-# Start planner agent (in another terminal)
-uv run src/a2a_mcp/agents/ --agent-card agent_cards/planner_agent.json --port 10102
+# Start presale agent (in another terminal)
+uv run src/a2a_mcp/agents/ --agent-card agent_cards/presale_agent.json --port 10001
+```
+
+### Running the CLI
+```bash
+# Navigate to the CLI sample directory:
+cd hosts\cli
+
+# for example --agent http://localhost:10000. More command line options are documented in the source code.
+uv run . --agent [url-of-your-a2a-server]
 ```
 
 ## Project Structure

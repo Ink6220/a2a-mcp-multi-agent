@@ -8,9 +8,6 @@ from mcp.server.fastmcp import FastMCP
 from mcp.server.fastmcp.utilities.logging import get_logger
 logger = get_logger(__name__)
 
-# Create server
-# mcp = FastMCP("MCP Server")
-# mcp.settings.port = 8000
 AGENT_CARDS_DIR = "agent_cards"
 
 def load_agent_cards():

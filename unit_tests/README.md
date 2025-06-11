@@ -1,31 +1,29 @@
 # A2A Protocol Compliance Unit Tests
 
-This directory contains comprehensive unit tests for verifying A2A protocol compliance at two different levels:
+This directory contains comprehensive unit tests for verifying A2A protocol compliance for agents using a `ResponseFormat(BaseModel)` architecture.
 
-1. **Agent `invoke()` Method Compliance** - Black box testing of agent responses
-2. **Executor `execute()` Method Compliance** - Testing executor state management and Starlette integration
+1.  **Agent `invoke()` Method Compliance**: Validates that an agent's `invoke()` method returns a compliant `ResponseFormat` object.
+2.  **Executor `execute()` Method Compliance**: Verifies that the executor correctly handles these `ResponseFormat` objects and produces a compliant A2A event stream for Starlette.
 
 ---
 
-## 🎯 **Testing Philosophy**
+## 🏗️ **Testing Philosophy: `ResponseFormat` Object Architecture**
 
-### **Two-Layer Testing Approach**
+The entire testing suite is now based on the architecture that an agent's `invoke()` method **must return a `ResponseFormat(BaseModel)` object**, not a dictionary.
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                    A2A PROTOCOL COMPLIANCE                 │
+│           A2A Compliance with ResponseFormat Objects        │
 ├─────────────────────────────────────────────────────────────┤
-│  Layer 1: Agent invoke() Method Testing                    │
-│  ├── Black box testing of agent responses                  │
-│  ├── Validates A2A response format                         │
-│  ├── Type checking and logic validation                    │
-│  └── Basic executor integration                            │
+│  Layer 1: Agent invoke() -> ResponseFormat Object          │
+│  ├── Must return a ResponseFormat(BaseModel) instance      │
+│  ├── Validates object attributes (action, status, message) │
+│  └── Ensures value validity and conditional requirements   │
 ├─────────────────────────────────────────────────────────────┤
-│  Layer 2: Executor execute() Method Testing                │
-│  ├── Assumes agent invoke() is compliant                   │
-│  ├── Tests state management and streaming                  │
-│  ├── Validates Starlette integration                       │
-│  └── End-to-end workflow verification                      │
+│  Layer 2: Executor handles ResponseFormat Object           │
+│  ├── Assumes agent returns a compliant object              │
+│  ├── Reads attributes to manage state (response.status)    │
+│  └── Creates artifacts from the object for Starlette       │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -37,121 +35,64 @@ This directory contains comprehensive unit tests for verifying A2A protocol comp
 unit_tests/
 ├── README.md                                          # This file
 ├── test_invoke()_protocol_compliance/                 # Layer 1: Agent Testing
-│   ├── Testing_agents_invoke().md                     # Documentation
-│   ├── test_agent_a2a_compliance.py                   # Main test framework
+│   ├── Testing_agents_invoke().md                     # Documentation for ResponseFormat
+│   ├── test_agent_a2a_compliance.py                   # Tests for ResponseFormat objects
 │   └── basic_executor.py                              # Simplified executor
 └── test_execute()_starlette_compliance/              # Layer 2: Executor Testing
-    ├── Testing_execute()_starlette_compliance.md      # Documentation
-    ├── mock_agent.py                                   # A2A compliant mock agent
+    ├── Testing_execute()_starlette_compliance.md      # Documentation for executor
+    ├── mock_agent.py                                  # Mock agent returns ResponseFormat objects
     ├── unit_test_starlette.py                         # Starlette simulation
-    └── manual_test_executor.py                        # Manual testing utilities
+    └── manual_test_executor.py                        # Manual debugging utilities
 ```
 
 ---
 
-## 🧪 **Test Suite 1: Agent invoke() Compliance**
+## 🧪 **Test Suite 1: Agent `invoke()` returns `ResponseFormat`**
 
 ### **Purpose**
-Verify that your agent's `invoke()` method returns A2A-compliant responses.
+Verify that your agent's `invoke()` method returns a valid `ResponseFormat` object.
 
 ### **Location**
-```bash
-cd unit_tests/test_invoke()_protocol_compliance/
-```
+`unit_tests/test_invoke()_protocol_compliance/`
 
 ### **Quick Start**
 ```bash
-# Run the compliance test
+# Run the compliance test with example agents
 python test_agent_a2a_compliance.py
-
-# Test your own agent
-python -c "
-from test_agent_a2a_compliance import A2AComplianceTester, print_compliance_report
-from your_agent import YourAgent
-
-agent = YourAgent()
-results = await A2AComplianceTester.test_agent_invoke_compliance(agent)
-print_compliance_report(results)
-"
 ```
 
 ### **What It Tests**
-- ✅ **Required Fields**: `is_task_complete`, `require_user_input`, `content`
-- ✅ **Type Validation**: Correct types for all fields
-- ✅ **Logic Validation**: No contradictory states
-- ✅ **Error Handling**: Graceful error responses
-- ✅ **Optional Fields**: Proper handling of `hang_up`, delegation fields
-
-### **Example Output**
-```
-🧪 A2A Protocol Compliance Tester
-============================================================
-
-📋 Testing Example Compliant Agent:
-============================================================
-A2A COMPLIANCE REPORT
-============================================================
-Agent Name: your-agent
-Total Tests: 5
-Passed: 5
-Failed: 0
-Compliance: 100.0%
-Status: ✅ FULLY COMPLIANT
-```
+- ✅ **Return Type**: `invoke()` must return an object, not a `dict`.
+- ✅ **Required Attributes**: The object must have `action`, `status`, `message`.
+- ✅ **Valid Values**: Validates that attributes have valid values from allowed sets.
+- ✅ **Conditional Requirements**: Ensures delegation fields are present when needed.
 
 ### **Documentation**
 📖 [**Full Documentation**](test_invoke()_protocol_compliance/Testing_agents_invoke().md)
 
 ---
 
-## 🧪 **Test Suite 2: Executor execute() Compliance**
+## 🧪 **Test Suite 2: Executor handles `ResponseFormat`**
 
 ### **Purpose**
-Verify that the executor properly handles A2A responses and integrates with Starlette.
+Verify that the executor correctly processes `ResponseFormat` objects and integrates with Starlette.
 
 ### **Location**
-```bash
-cd unit_tests/test_execute()_starlette_compliance/
-```
+`unit_tests/test_execute()_starlette_compliance/`
 
 ### **Quick Start**
 ```bash
-# Run Starlette simulation test
+# Run the Starlette simulation with mock agents
 python unit_test_starlette.py
-
-# Run pytest tests
-pytest mock_agent.py -v
-
-# Manual testing
-python manual_test_executor.py
 ```
 
 ### **What It Tests**
-- ✅ **Task Management**: Proper task creation with unique IDs
-- ✅ **State Transitions**: `working` → `completed`/`input_required`
-- ✅ **Event Streaming**: Proper SSE event formatting
-- ✅ **Artifact Creation**: Correct artifact handling on completion
-- ✅ **Error Resilience**: Graceful error handling and recovery
-- ✅ **Starlette Integration**: Ready for web application deployment
-
-### **Example Output**
-```
-🧪 Testing GenericAgentExecutor with Starlette App
-============================================================
-
-🌐 Simulating Starlette Request
-📨 Incoming Message: Hello, process this data
-🚀 Executing agent: test-agent
-📊 Status Update: working - Processing your request...
-📦 Artifact Created: test-agent-result
-✅ Task Completed: task-1234
-
-📡 Streaming Events (what client receives):
-  1. task_created: {...}
-  2. status_update: {...}
-  3. artifact: {...}
-  4. task_complete: {...}
-```
+- ✅ **Object Handling**: Executor correctly reads attributes from the `ResponseFormat` object.
+- ✅ **State Transitions**: Proper transitions based on `status` field values.
+- ✅ **Artifact Creation**: Creates artifacts from the `ResponseFormat` object.
+- ✅ **Event Streaming**: Produces a compliant SSE event stream for Starlette.
+- ✅ **Error Resilience**: Gracefully handles agents that raise exceptions.
+- ✅ **Delegation Support**: Handles delegation scenarios with required fields.
 
 ### **Documentation**
 📖 [**Full Documentation**](test_execute()_starlette_compliance/Testing_execute()_starlette_compliance.md)
@@ -160,96 +101,76 @@ python manual_test_executor.py
 
 ## 🚀 **Getting Started**
 
-### **Step 1: Test Your Agent's invoke() Method**
+### **Step 1: Test Your Agent's `invoke()` Method**
+Ensure your agent returns a `ResponseFormat` object and passes the agent-level compliance test.
 ```bash
 cd unit_tests/test_invoke()_protocol_compliance/
 python test_agent_a2a_compliance.py
 ```
-
-**If tests fail:**
-1. Check the error messages in the report
-2. Fix your agent's `invoke()` method to return proper A2A format
-3. Re-run the test until 100% compliant
+**If tests fail:** Your agent is likely returning a `dict` or an object with missing/invalid attributes. See the documentation for common issues.
 
 ### **Step 2: Test Executor Integration**
+Once your agent is compliant, run the executor test to ensure it's handled correctly.
 ```bash
 cd unit_tests/test_execute()_starlette_compliance/
 python unit_test_starlette.py
 ```
-
-**If tests fail:**
-1. Verify your agent passes Step 1
-2. Check executor state management
-3. Verify proper event streaming
-
-### **Step 3: Deploy with Confidence**
-Once both test suites pass, your agent is ready for production deployment with full A2A protocol compliance.
+**If tests fail:** The issue is likely in the executor's logic for handling the object, not the agent itself.
 
 ---
 
-## 📋 **A2A Protocol Requirements Summary**
+## 📋 **`ResponseFormat` Requirements Summary**
 
-### **Agent invoke() Method Must Return:**
+### **Agent `invoke()` Method Must Return:**
+An instance of your `ResponseFormat(BaseModel)` class.
+
+### **`ResponseFormat` Class Must Contain:**
 ```python
-{
-    "is_task_complete": bool,      # True = done, False = continue
-    "require_user_input": bool,    # True = needs input, False = processing
-    "content": str,                # Message content
-    "hang_up": bool               # Optional: end conversation
-}
+class ResponseFormat(BaseModel):
+    # --- A2A Core (Required) ---
+    action: Literal["answer", "call_next_agent"]
+    status: Literal["input_required", "completed", "failed"]
+    message: str
+    
+    # --- Optional Extensions ---
+    custom_status: Optional[str] = None
+    agent_name: Optional[str] = None
+    next_agent_instruction: Optional[str] = None
+    next_agent_schema: Optional[Dict[str, Any]] = None
 ```
 
-### **Validation Rules:**
-1. **Required Fields**: All 3 core fields must be present
-2. **Type Safety**: Booleans must be booleans, strings must be strings
-3. **Logic Consistency**: Cannot have both `is_task_complete=True` and `require_user_input=True`
-4. **Optional Fields**: Additional fields like `hang_up`, `call_next_agent` are allowed
+### **Conditional Requirements:**
+When `action="call_next_agent"`, these fields become **required**:
+- `agent_name`: str
+- `next_agent_instruction`: str
 
-### **Executor Must Provide:**
-1. **Task Creation**: Unique task and context IDs
-2. **Status Updates**: Initial `working` → final state
-3. **Artifact Creation**: Only on task completion
-4. **Event Streaming**: Proper SSE format for Starlette
-5. **Error Handling**: Graceful error recovery
+### **Executor Must:**
+1.  Receive the `ResponseFormat` object from the agent.
+2.  Read its attributes (e.g., `response.status`, `response.action`) to determine task state.
+3.  Create an artifact from the object's data upon completion.
+4.  Generate a standard A2A event stream.
 
 ---
 
 ## 🔧 **Common Issues and Solutions**
 
-### **Agent invoke() Issues**
-
-| Issue | Example | Solution |
-|-------|---------|----------|
-| Missing Fields | `{"message": "hello"}` | Add `is_task_complete`, `require_user_input`, `content` |
-| Wrong Types | `{"is_task_complete": "yes"}` | Use `True`/`False` instead of strings |
-| Logic Error | `{"is_task_complete": True, "require_user_input": True}` | Cannot both be `True` |
-
-### **Executor Integration Issues**
-
 | Issue | Symptom | Solution |
-|-------|---------|----------|
-| Missing Task Creation | No events generated | Create task with `new_task()` |
-| No Initial Status | Client sees no progress | Send initial `working` status |
-| Missing Artifacts | Completion without content | Create artifact before `complete()` |
-| Poor Error Handling | Crashes on agent errors | Wrap `invoke()` in try/catch |
+|---|---|---|
+| **Wrong Return Type** | `AttributeError` in executor or `Response is not an object` in tests. | Ensure `invoke()` returns a `ResponseFormat` **instance**, not a `dict`. |
+| **Missing Attribute** | `AttributeError` or `Missing A2A attribute` in tests. | Add the missing attribute (`action`, `status`, `message`) to your `ResponseFormat` class definition. |
+| **Invalid Values** | `'action' must be one of ['answer', 'call_next_agent']` in tests. | Use only allowed values for `action` and `status` fields. |
+| **Missing Delegation Fields** | `'agent_name' is required when action is 'call_next_agent'` in tests. | Include both `agent_name` and `next_agent_instruction` for delegation. |
 
 ---
 
 ## 🎯 **Success Criteria**
 
-### **Your Agent is A2A Compliant When:**
-- ✅ All invoke() compliance tests pass (100%)
-- ✅ All executor integration tests pass
-- ✅ Proper state transitions in all scenarios
-- ✅ Clean error handling and recovery
-- ✅ Ready for Starlette deployment
+Your full agent system is compliant when:
+- ✅ Your agent's `invoke()` method returns a valid `ResponseFormat` object and passes the **agent compliance test**.
+- ✅ Your executor correctly processes this object and passes the **executor compliance test**.
+- ✅ The end-to-end flow produces a valid A2A event stream for a Starlette client.
 
-### **Ready for Production:**
-- ✅ Agent invoke() method is 100% compliant
-- ✅ Executor handles all response types correctly
-- ✅ Event streaming works properly
-- ✅ Error scenarios are handled gracefully
-- ✅ Performance is acceptable under load
+With this `ResponseFormat`-based architecture, you ensure a type-safe, robust, and easily debuggable system.
 
 ---
 

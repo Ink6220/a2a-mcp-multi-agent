@@ -19,6 +19,7 @@ from a2a_mcp.common.card_discovery import A2ACardDiscovery
 import traceback
 import time
 from colorama import Fore, Style, init
+from pydantic import ValidationError
 
 class A2AOpenaiAgent(BaseAgent):
     def __init__(self, agent_card: CustomAgentCard, card_discovery: A2ACardDiscovery, mcp_server: list=[]):
@@ -58,21 +59,33 @@ class A2AOpenaiAgent(BaseAgent):
 
             # TODO: Shold we save conversation history here ? 
         
+            # Convert result to ResponseFormat
+            try:
+                yield result.final_output
+            except ValidationError as ve:
+                print("Validation error while formatting response:", ve)
+                yield ResponseFormat(
+                    action="answer",
+                    status="failed",
+                    custom_status="",
+                    message="The response format was invalid.",
+                    agent_name=None,
+                    next_agent_instruction=None,
+                    next_agent_schema=None
+                )
+
         except OpenAIError as e:
             traceback.print_exc()
             print(e)
-            yield {
-                "is_task_complete": False,
-                "require_user_input": True,
-                "content": "We are unable to process your request at the moment. Please try again.",
-                "hang_up": False,
-                "call_next_agent": False,
-                "agent_name": "",
-                "next_agent_instruction": "",
-                "next_agent_schema": {}
-            }
-
-        yield self.parse_agent_response(result.final_output)
+            yield ResponseFormat(
+                action="answer",
+                status="input_required",
+                custom_status="",
+                message="We are unable to process your request at the moment. Please try again.",
+                agent_name=None,
+                next_agent_instruction=None,
+                next_agent_schema=None
+            )
 
     async def stream(self, query: str, context_id: str, task_id: str) -> AsyncGenerator[Dict[str, Any], None]:
 
@@ -255,7 +268,6 @@ class A2AOpenaiAgent(BaseAgent):
                         "is_task_complete": False,
                         "require_user_input": True,
                         "content": response.message,
-                        
                         "hang_up": response.custom_status == "hang_up",
                         "call_next_agent": False,
                         "agent_name": "",

@@ -16,8 +16,7 @@ from a2a.types import (
 )
 from a2a.utils import new_agent_text_message, new_task
 from a2a.utils.errors import ServerError
-from a2a_mcp.common.base_agent.base_agent import BaseAgent
-
+from a2a_mcp.common.base_agent.base_agent import BaseAgent, ResponseFormat
 logger = logging.getLogger(__name__)
 
 
@@ -63,39 +62,40 @@ class GenericAgentExecutor(AgentExecutor):
                 continue
             
             print("item", item)
-            is_task_complete = item['is_task_complete']
-            require_user_input = item['require_user_input']
+            if isinstance(item, ResponseFormat):
+                is_task_complete = item.status == "completed" #item['is_task_complete']
+                require_user_input = (item.status == "input_required" or item.status == "failed") #item['require_user_input']
 
-            if is_task_complete:
-                # Always create a TextPart for the response content
-                part = TextPart(text=item['content'])
+                if is_task_complete:
+                    # Always create a TextPart for the response content
+                    part = TextPart(text=item.message)
 
-                updater.add_artifact(
-                    [part],
-                    name=f'{self.agent.agent_name}-result',
-                )
-                updater.complete()
-                break
-            elif require_user_input:
-                updater.update_status(
-                    TaskState.input_required,
-                    new_agent_text_message(
-                        item['content'],
-                        task.contextId,
-                        task.id,
-                    ),
-                    final=True,
-                )
-                break
-            else:
-                updater.update_status(
-                    TaskState.working,
-                    new_agent_text_message(
-                        item['content'],
-                        task.contextId,
-                        task.id,
-                    ),
-                )
+                    updater.add_artifact(
+                        [part],
+                        name=f'{self.agent.agent_name}-result',
+                    )
+                    updater.complete()
+                    break
+                elif require_user_input:
+                    updater.update_status(
+                        TaskState.input_required,
+                        new_agent_text_message(
+                            item.message,
+                            task.contextId,
+                            task.id,
+                        ),
+                        final=True,
+                    )
+                    break
+                else:
+                    updater.update_status(
+                        TaskState.working,
+                        new_agent_text_message(
+                            item.message,
+                            task.contextId,
+                            task.id,
+                        ),
+                    )
 
     def _validate_request(self, context: RequestContext) -> bool:
         return False

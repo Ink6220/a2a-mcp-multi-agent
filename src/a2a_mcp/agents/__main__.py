@@ -62,10 +62,12 @@ async def init_agent_server(host, port, agent_card, mcp_url, include_tools, excl
         print("Discover:")
         print(a2a_card_discovery.get_remote_agent_info())
 
+        task_store = InMemoryTaskStore()
+
         client = httpx.AsyncClient()
         request_handler = DefaultRequestHandler(
-            agent_executor=GenericAgentExecutor(agent=get_agent(agent_card, a2a_card_discovery, mcp_server)),
-            task_store=InMemoryTaskStore(),
+            agent_executor=GenericAgentExecutor(agent=get_agent(agent_card, a2a_card_discovery, mcp_server), task_store=task_store),
+            task_store=task_store,
             push_notifier=InMemoryPushNotifier(client),
         )
 

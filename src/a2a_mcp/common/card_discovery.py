@@ -50,8 +50,9 @@ class A2ACardDiscovery:
 
         remote_agent_info = []
         for card in self.remote_agent_cards.values():
+            # TODO: Fix unicode escape when receive Thai character
             remote_agent_info.append(
-                {"name": card.name, "description": card.description}
+                {"name": card.name, "description": card.description, "skill": [s.model_dump() for s in card.skills]}
             )
         return remote_agent_info
     

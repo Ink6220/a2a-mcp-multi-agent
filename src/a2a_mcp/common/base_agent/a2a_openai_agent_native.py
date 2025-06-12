@@ -44,10 +44,10 @@ class A2AOpenaiAgentNative(BaseAgent):
         )
         return client, assistant
          
-    async def invoke(self, query, session_id):
+    async def invoke(self, query, context_id: str, task_id: str) -> ResponseFormat:
         try:
             history = "" # TODO: Load Memory
-            agent_info = self.card_discovery.get_remote_agent_info() # TODO: Add agent discovery information
+            agent_info = self.card_discovery.get_remote_agent_info()
             inst = self.root_instruction(chat_history=history, agent_info=agent_info)
             session = self.mcp_server[0]
             tools_result = await session.list_tools()
@@ -92,7 +92,7 @@ class A2AOpenaiAgentNative(BaseAgent):
                 
             print(Fore.GREEN + Style.BRIGHT + "[Runner.run]:" + Style.RESET_ALL, time.time() - start_time)
             print("\n\n")
-            result = self.parse_structure_output(output_message[0].content[0].text)
+            response_object = self.parse_structure_output(output_message[0].content[0].text)
             print(output_message[0].content[0].text)
 
             # TODO: Shold we save conversation history here ? 
@@ -101,7 +101,7 @@ class A2AOpenaiAgentNative(BaseAgent):
             traceback.print_exc()
             print(e)
 
-        return self.parse_agent_response(result)
+        return response_object
 
     async def stream(self, query, sessionId) -> AsyncIterable[Dict[str, Any]]:
 
@@ -300,9 +300,12 @@ class A2AOpenaiAgentNative(BaseAgent):
 
             return ResponseFormat(
                 action=tag_values.get("action", "answer"),         # Default or error-prone
-                status=tag_values.get("status", "completed"),      # Default or error-prone
+                status=tag_values.get("status", "input_required"),      # Default or error-prone
+                custom_status=tag_values.get("custom_status", ""),
                 agent_name=tag_values.get("agent_name", ""),       # Optional or blank
                 message=tag_values.get("message", ""),             # Optional or blank
+                next_agent_instruction=tag_values.get("next_agent_instruction", ""),    
+                next_agent_schema=tag_values.get("next_agent_schema", "")
             )
         except ET.ParseError as e:
             raise ValueError(f"Invalid XML: {e}")

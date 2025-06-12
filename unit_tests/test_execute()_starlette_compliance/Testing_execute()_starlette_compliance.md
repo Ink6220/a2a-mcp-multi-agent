@@ -1,79 +1,71 @@
 # A2A Execute() Method Starlette Compliance Testing
-## Ensuring Executor Output is A2A Compliant for Starlette Integration
+## Testing New Executor Logic with ResponseFormat Objects
 
 ### 🎯 **Objective**
-Verify that the `GenericAgentExecutor.execute()` method produces A2A-compliant output that integrates seamlessly with Starlette web applications. This assumes the agent's `invoke()` method is already A2A compliant and focuses on testing the executor's state management and streaming capabilities.
+Test a **new `execute()` method** that properly handles `ResponseFormat` objects returned by agents and produces A2A-compliant output for Starlette web applications. This testing assumes that all agent `invoke()` methods are correct and focuses purely on **executor logic validation**.
 
 ---
 
 ## 🧪 **Testing Framework Overview**
 
 ### **Test Philosophy**
-- ✅ **Agent invoke() is Correct**: We assume agent responses are already A2A compliant
-- ✅ **Focus on Executor**: Test the executor's ability to handle A2A responses properly
+- ✅ **Agent invoke() is Always Correct**: All agents return proper `ResponseFormat` objects
+- ✅ **Focus on Executor Logic**: Test how the executor translates `ResponseFormat` → A2A events
 - ✅ **Starlette Integration**: Ensure output format works with Starlette SSE streaming
-- ✅ **State Management**: Verify proper task state transitions and event handling
+- ✅ **Forward-Looking Architecture**: Design and test the future executor implementation
 
 ### **Key Components**
-1. **`mock_agent.py`**: A2A compliant mock agent with configurable responses
-2. **`unit_test_starlette.py`**: Minimal test simulating Starlette integration
-3. **`manual_test_executor.py`**: Manual testing utilities for debugging
+1. **`mock_agent.py`**: ResponseFormat-compliant mock agents with configurable responses
+2. **`unit_test_starlette.py`**: Complete test simulating Starlette integration with new executor
 
 ---
 
 ## 🏗️ **Test Architecture**
 
-### **1. MockAgent (`mock_agent.py`)**
+### **1. MockAgent with `ResponseFormat` (`mock_agent.py`)**
 
-A fully A2A-compliant mock agent that returns predictable responses for testing.
+A fully xPResponseFormat-compliant mock agent that returns predictable objects for testing.
 
 #### **Key Features:**
-- ✅ **Configurable Responses**: Set exact response data for testing
-- ✅ **A2A Compliant**: Always returns proper A2A format
-- ✅ **Minimal Dependencies**: No external dependencies for testing
-- ✅ **Multiple Scenarios**: Supports all A2A response types
+- ✅ **Returns `ResponseFormat` Objects**: Guarantees type-safe, structured output
+- ✅ **Configurable Scenarios**: Pre-configured agents for completion, input required, delegation, and errors
+- ✅ **A2A Compliant**: Always returns objects with proper A2A attributes (`action`, `status`, `message`)
+- ✅ **Minimal Dependencies**: Self-contained for easy testing
 
 #### **Usage Example:**
 ```python
-# Test successful completion
-mock_agent = MockAgent({
-    "is_task_complete": True,
-    "require_user_input": False,
-    "content": "Task completed successfully!",
-    "hang_up": False
-})
+from mock_agent import get_completion_agent, get_input_required_agent
 
-# Test user input required
-mock_agent = MockAgent({
-    "is_task_complete": False,
-    "require_user_input": True,
-    "content": "Please provide more information.",
-    "hang_up": False
-})
+# Get an agent that simulates successful completion
+completion_agent = get_completion_agent()
+
+# Get an agent that simulates needing user input
+input_agent = get_input_required_agent()
 ```
 
-### **2. Starlette Simulation (`unit_test_starlette.py`)**
+### **2. New Executor Testing (`unit_test_starlette.py`)**
 
-A minimal simulation of how the executor would work in a Starlette application.
+Tests a new `TestAgentExecutor` that demonstrates the ideal architecture for handling `ResponseFormat` objects.
 
 #### **Features:**
-- ✅ **Mock A2A Components**: Simulated TaskUpdater, EventQueue, TaskState
-- ✅ **Event Streaming**: Captures all streaming events for verification
-- ✅ **Translation Layer Testing**: Tests agent response translation
+- ✅ **Mock A2A Components**: Simulates `TaskUpdater`, `EventQueue`, `TaskState`
+- ✅ **Event Streaming Capture**: Captures all streaming events for verification
+- ✅ **ResponseFormat Handling**: Tests how the executor processes `ResponseFormat` objects
 - ✅ **Multiple Scenarios**: Covers all response types and edge cases
 
 #### **Test Flow:**
-1. **Request Simulation**: Mock incoming Starlette request
-2. **Context Creation**: Create mock RequestContext
-3. **Executor Execution**: Run GenericAgentExecutor.execute()
-4. **Event Capture**: Collect all streaming events
-5. **Verification**: Verify proper A2A compliance and state transitions
+1. **Get Mock Agent**: Select the mock agent for the desired scenario (e.g., `get_completion_agent()`)
+2. **Simulate Request**: Mock an incoming Starlette request
+3. **Execute**: Run `TestAgentExecutor.execute()` with the mock agent
+4. **Capture Events**: Collect all streaming events from the mock event queue
+5. **Verify**: Check for proper A2A compliance and state transitions
 
 ---
 
 ## 🚀 **How to Run Tests**
 
-### **Method 1: Manual Testing (Recommended for Development)**
+### **Run New Executor Tests**
+This runs through all test scenarios using ResponseFormat-compliant mock agents.
 ```bash
 cd unit_tests/test_execute()_starlette_compliance
 python unit_test_starlette.py
@@ -81,40 +73,15 @@ python unit_test_starlette.py
 
 **Expected Output:**
 ```
-🧪 Testing GenericAgentExecutor with Starlette App
+🧪 Testing Executor with ResponseFormat Objects
 ============================================================
-
-🌐 Simulating Starlette Request
-📨 Incoming Message: Hello, process this data
-🚀 Executing agent: test-agent
-📝 User Query: Hello, process this data
-🔄 Translation Layer Processing...
-   Query: Hello, process this data
-   Session: context-1234
-   LLM Response: {...}
-   A2A Response: {...}
-🤖 Agent Response: {...}
-📊 Status Update: working - Processing your request...
-📦 Artifact Created: test-agent-result
-✅ Task Completed: task-1234
-
-📡 Streaming Events (what client receives):
-  1. task_created: {...}
-  2. status_update: {...}
-  3. artifact: {...}
-  4. task_complete: {...}
-```
-
-### **Method 2: Pytest Testing**
-```bash
-cd unit_tests/test_execute()_starlette_compliance
-pytest mock_agent.py -v
-```
-
-### **Method 3: Manual Testing with Real Agent**
-```bash
-cd unit_tests/test_execute()_starlette_compliance  
-python manual_test_executor.py
+✅ Scenario: Successful Task Completion -- PASSED
+✅ Scenario: User Input Required -- PASSED
+✅ Scenario: Task Failed -- PASSED
+✅ Scenario: Agent Delegation -- PASSED
+✅ Scenario: Graceful Error Handling -- PASSED
+============================================================
+🎉 All executor test scenarios passed!
 ```
 
 ---
@@ -122,293 +89,115 @@ python manual_test_executor.py
 ## 📋 **Test Scenarios Covered**
 
 ### **1. Successful Task Completion**
-**Agent Response:**
-```python
-{
-    "is_task_complete": True,
-    "require_user_input": False,
-    "content": "Task completed successfully!"
-}
-```
-
-**Expected A2A Events:**
-1. `task_created` - New task with unique ID
-2. `status_update` - Initial "working" status
-3. `artifact` - Result artifact with content
-4. `task_complete` - Final completion event
-
-**Verification Points:**
-- ✅ Task created with unique `task_id` and `context_id`
-- ✅ Initial `working` status sent to client
-- ✅ Artifact created with `TextPart` content
-- ✅ Task marked as complete
+- **Agent Returns**: `ResponseFormat(action="answer", status="completed", ...)`
+- **Expected Events**: `task_created` → `status_update(working)` → `artifact` → `task_complete`
+- **Verification**: Artifact is created from the `ResponseFormat` object, and task is marked complete
 
 ### **2. User Input Required**
-**Agent Response:**
+- **Agent Returns**: `ResponseFormat(action="answer", status="input_required", ...)`
+- **Expected Events**: `task_created` → `status_update(working)` → `status_update(input_required)`
+- **Verification**: No artifact is created, and the final status is `input_required`
+
+### **3. Task Failed**
+- **Agent Returns**: `ResponseFormat(action="answer", status="failed", ...)`
+- **Expected Events**: `task_created` → `status_update(working)` → `status_update(failed)`
+- **Verification**: Task is marked as failed with appropriate error handling
+
+### **4. Agent Delegation**
+- **Agent Returns**: `ResponseFormat(action="call_next_agent", status="input_required", ...)`
+- **Expected Events**: `task_created` → `status_update(working)` → `status_update(input_required, final=True)`
+- **Verification**: The message is passed up to the user (CLI client) with state `input_required`. Only after the delegated agent (expert) returns and the original agent finishes, the executor emits `completed`.
+
+#### **Usage Example:**
 ```python
-{
-    "is_task_complete": False,
-    "require_user_input": True,
-    "content": "Please provide more information."
-}
+from mock_agent import get_delegation_agent
+# Get an agent that simulates delegation (input_required)
+delegation_agent = get_delegation_agent()
 ```
 
-**Expected A2A Events:**
-1. `task_created` - New task with unique ID
-2. `status_update` - Initial "working" status
-3. `status_update` - Final "input_required" status with `final=True`
+#### **State Mapping:**
+- `action="call_next_agent"` (with `status="input_required"`) → `input_required` (delegation, message passed up)
+- `status="completed"` (and not delegation) → Task completes, artifact created
+- `status="input_required"` (and not delegation) → Task pauses, awaiting user input
+- `status="failed"` → Task fails, error handling
 
-**Verification Points:**
-- ✅ No artifact created (task not complete)
-- ✅ No task completion event
-- ✅ Final status marked as `input_required`
-- ✅ Final status has `final=True` flag
-
-### **3. Intermediate Working State**
-**Agent Response:**
-```python
-{
-    "is_task_complete": False,
-    "require_user_input": False,
-    "content": "Still processing..."
-}
-```
-
-**Expected A2A Events:**
-1. `task_created` - New task with unique ID
-2. `status_update` - Initial "working" status
-3. `status_update` - Additional "working" status with progress
-
-**Verification Points:**
-- ✅ Multiple working status updates
-- ✅ No completion or final status
-- ✅ Task remains active for further processing
-
-### **4. Error Handling**
-**Scenario:** Agent throws exception during invoke()
-
-**Expected A2A Events:**
-1. `task_created` - New task with unique ID
-2. `status_update` - Initial "working" status
-3. `status_update` - Error status as "input_required" with `final=True`
-
-**Verification Points:**
-- ✅ Graceful error handling
-- ✅ Error message provided to user
-- ✅ Task marked as requiring input (error state)
-
-### **5. Delegation Scenario**
-**Agent Response:**
-```python
-{
-    "is_task_complete": True,
-    "require_user_input": False,
-    "content": "Delegating to specialist agent",
-    "call_next_agent": True,
-    "agent_name": "specialist-agent"
-}
-```
-
-**Expected A2A Events:**
-1. `task_created` - New task with unique ID
-2. `status_update` - Initial "working" status
-3. `artifact` - Delegation message
-4. `task_complete` - Task completed (ready for delegation)
-
-**Verification Points:**
-- ✅ Delegation fields preserved in artifact
-- ✅ Task marked as complete
-- ✅ Ready for next agent in chain
+### **5. Error Handling**
+- **Agent Action**: `invoke()` raises an exception
+- **Expected Events**: `task_created` → `status_update(working)` → `status_update(input_required)`
+- **Verification**: Executor catches the error and sets an `input_required` status with an error message
 
 ---
 
-## 🔧 **Mock Components**
+## 🔧 **New Executor's Role with `ResponseFormat`**
 
-### **MockTaskState**
-```python
-class MockTaskState:
-    working = "working"
-    input_required = "input_required"
-    completed = "completed"
-```
-
-### **MockTaskUpdater**
-```python
-class MockTaskUpdater:
-    def update_status(self, state, message, final=False):
-        # Captures status update events
-    
-    def add_artifact(self, parts, name):
-        # Captures artifact creation events
-    
-    def complete(self):
-        # Captures task completion events
-```
-
-### **MockTextPart**
-```python
-class MockTextPart:
-    def __init__(self, text: str):
-        self.text = text
-```
-
----
-
-## 🎨 **Translation Layer Testing**
-
-### **Your Agent Template (`YourTestAgent`)**
-
-The test includes a template showing how to implement the translation layer between your LLM responses and A2A format.
+The new executor is the bridge between the agent's `ResponseFormat` object and the A2A event stream.
 
 #### **Translation Flow:**
-1. **LLM Response**: Your agent's ResponseFormat (BaseModel)
-2. **Translation Layer**: Convert to A2A + delegation superset
-3. **A2A Output**: Properly formatted response for executor
+1. **Agent `invoke()`**: Returns a `ResponseFormat` object
+2. **Executor Receives Object**: The `execute` method gets this object
+3. **Executor Reads Attributes**: It accesses attributes like `response.status` and `response.action` to decide the next state
+4. **Delegation**: If `action="call_next_agent"`, the executor emits `input_required` and passes the message up to the user. Only after the expert returns and the original agent finishes does it emit `completed`.
+5. **Executor Creates Artifact**: It uses the `ResponseFormat` object (or its dictionary representation) as the payload for `updater.add_artifact()` (on completion)
+6. **A2A Events**: The executor generates the standard A2A event stream for the client
 
-#### **Example Translation:**
-```python
-def _translate_to_a2a(self, llm_response: Dict[str, Any]) -> Dict[str, Any]:
-    # A2A Protocol fields
-    a2a_response = {
-        "is_task_complete": llm_response["status"] in ["completed", "hang_up"],
-        "require_user_input": llm_response["status"] == "input_required", 
-        "content": llm_response["message"],
-        "hang_up": llm_response["status"] == "hang_up"
-    }
-    
-    # Superset fields for delegation
-    if llm_response.get("action") == "call_next_agent":
-        a2a_response.update({
-            "call_next_agent": True,
-            "agent_name": llm_response.get("agent_name", ""),
-            "delegation_reason": "specialist_required"
-        })
-    
-    return a2a_response
-```
+#### **State Mapping:**
+- `action="call_next_agent"` (with `status="input_required"`) → `input_required` (delegation, message passed up)
+- `status="completed"` (and not delegation) → Task completes, artifact created
+- `status="input_required"` (and not delegation) → Task pauses, awaiting user input
+- `status="failed"` → Task fails, error handling
+
+This architecture ensures that the agent's internal logic is cleanly separated from the A2A protocol implementation, with the `ResponseFormat` object serving as the contract.
 
 ---
 
-## 🔍 **Starlette Integration Points**
+## 🎯 **Design Principles for New Executor**
 
-### **1. Request Context**
-```python
-context = Mock()
-context.get_user_input.return_value = user_message
-context.current_task = None  # New request
-context.message = Mock()
-```
+### **Core Assumptions**
+1. **All agents return proper `ResponseFormat` objects** - No need to test agent compliance
+2. **Focus on executor logic** - How to translate `ResponseFormat` → A2A events
+3. **Starlette compatibility** - Events must work with SSE streaming
+4. **Error resilience** - Graceful handling of unexpected scenarios
 
-### **2. Event Queue for Streaming**
-```python
-event_queue = []  # Collects all streaming events
-```
-
-### **3. Executor Execution**
-```python
-executor = TestAgentExecutor(agent)
-await executor.execute(context, event_queue)
-```
-
-### **4. Event Stream Processing**
-```python
-for event in event_queue:
-    if event['type'] == 'status_update':
-        # Handle status updates
-    elif event['type'] == 'artifact':
-        # Handle artifact creation
-    elif event['type'] == 'task_complete':
-        # Handle task completion
-```
+### **Key Benefits of This Approach**
+- ✅ **Clean Architecture**: `ResponseFormat` provides clear contract between agent and executor
+- ✅ **Easy Testing**: Mock agents with predictable responses
+- ✅ **Type Safety**: Pydantic validation ensures correct object structure
+- ✅ **Simplified Debugging**: Focus only on executor logic, not agent behavior
+- ✅ **Future-Proof**: Ready for new agent implementations
 
 ---
 
-## 🚨 **Common Integration Issues**
+## 🚨 **Common Integration Issues to Avoid**
 
-### **1. Missing Task Creation**
-```python
-# ❌ WRONG - No task created
-context.current_task = None
-# Missing: event_queue.enqueue_event(task)
+### **1. Incorrect State Mapping**
+- **Issue**: Wrong A2A status for `ResponseFormat.status`
+- **Solution**: Follow the state mapping exactly (`completed` → artifact + complete, etc.)
 
-# ✅ CORRECT - Proper task creation
-if not context.current_task:
-    task = new_task(context.message)
-    event_queue.enqueue_event(task)
-```
+### **2. Missing Artifact Content**
+- **Issue**: Empty or malformed artifacts
+- **Solution**: Always use `ResponseFormat.message` as artifact content
 
-### **2. Improper Status Transitions**
-```python
-# ❌ WRONG - Missing initial working status
-result = await agent.invoke(query, session_id)
-if result['is_task_complete']:
-    updater.complete()
+### **3. Delegation Field Handling**
+- **Issue**: Missing delegation information in artifacts
+- **Solution**: Preserve all `ResponseFormat` fields in delegation artifacts
 
-# ✅ CORRECT - Proper status flow
-updater.update_status(TaskState.working, "Processing...")
-result = await agent.invoke(query, session_id)
-if result['is_task_complete']:
-    updater.add_artifact([part], name="result")
-    updater.complete()
-```
-
-### **3. Artifact Creation Issues**
-```python
-# ❌ WRONG - Missing artifact on completion
-if result['is_task_complete']:
-    updater.complete()  # No artifact!
-
-# ✅ CORRECT - Artifact before completion
-if result['is_task_complete']:
-    part = TextPart(text=result['content'])
-    updater.add_artifact([part], name=f'{agent.agent_name}-result')
-    updater.complete()
-```
-
----
-
-## 📊 **Event Verification Checklist**
-
-### **For Task Completion:**
-- [ ] Task created with unique ID
-- [ ] Initial `working` status sent
-- [ ] Artifact created with proper content
-- [ ] Task marked as complete
-- [ ] No `input_required` status sent
-
-### **For Input Required:**
-- [ ] Task created with unique ID
-- [ ] Initial `working` status sent
-- [ ] Final `input_required` status with `final=True`
-- [ ] No artifact created
-- [ ] No task completion event
-
-### **For Working State:**
-- [ ] Task created with unique ID
-- [ ] Initial `working` status sent
-- [ ] Additional `working` status with progress
-- [ ] No final status sent
-- [ ] Task remains active
-
-### **For Error Handling:**
-- [ ] Task created with unique ID
-- [ ] Initial `working` status sent
-- [ ] Error handled gracefully
-- [ ] `input_required` status with error message
-- [ ] `final=True` flag set
+### **4. Exception Handling**
+- **Issue**: Unhandled agent exceptions crash the executor
+- **Solution**: Wrap `agent.invoke()` in try-catch and return appropriate A2A status
 
 ---
 
 ## 🎯 **Success Criteria**
 
-Your executor is Starlette-ready when:
+Your new executor is ready when:
+- ✅ **Handles `ResponseFormat`**: Correctly processes `ResponseFormat` objects from agents
+- ✅ **Correct State Transitions**: Enters the correct state based on `status` field
+- ✅ **Proper Artifacts**: Creates meaningful artifacts from `ResponseFormat` objects on completion
+- ✅ **Event Streaming**: Generates correct A2A event stream for all scenarios
+- ✅ **Error Resilience**: Gracefully handles exceptions from agent `invoke()` method
+- ✅ **Delegation Support**: Properly handles delegation scenarios with all required fields
 
-- ✅ **Proper Task Management**: Creates tasks with unique IDs
-- ✅ **Status Flow**: Initial working → appropriate final state
-- ✅ **Artifact Handling**: Creates artifacts only on completion
-- ✅ **Event Streaming**: All events properly formatted for SSE
-- ✅ **Error Resilience**: Graceful handling of agent errors
-- ✅ **State Consistency**: No contradictory states or missing transitions
+When all tests in `unit_test_starlette.py` pass, your executor is confirmed to be compliant and ready for integration.
 
 ---
 
@@ -420,17 +209,13 @@ python unit_test_starlette.py
 ```
 
 ### **2. Verify All Scenarios Pass**
-Check that all 4 test scenarios complete successfully:
-- ✅ Successful completion
-- ✅ User input required  
-- ✅ Agent delegation
-- ✅ Error handling
+Check that all 5 test scenarios complete successfully
 
-### **3. Test with Your Agent**
-Replace `YourTestAgent` with your actual agent implementation and verify the translation layer works correctly.
+### **3. Implement Your Real Executor**
+Use the `TestAgentExecutor` in `unit_test_starlette.py` as a reference for implementing your actual executor
 
 ### **4. Deploy to Starlette**
-Once all tests pass, your executor is ready for integration with your Starlette application.
+Once all tests pass, your executor is ready for integration with your Starlette application
 
 ---
 
@@ -441,7 +226,7 @@ Use this template for integrating with your Starlette app:
 ```python
 from starlette.responses import StreamingResponse
 from your_agent import YourAgent
-from src.a2a_mcp.common.agent_executor import GenericAgentExecutor
+from your_new_executor import YourNewExecutor  # Based on TestAgentExecutor
 
 async def handle_message(request):
     # Extract message from request
@@ -455,8 +240,8 @@ async def handle_message(request):
     event_queue = EventQueue()
     
     # Create and execute
-    agent = YourAgent()
-    executor = GenericAgentExecutor(agent)
+    agent = YourAgent()  # Returns ResponseFormat objects
+    executor = YourNewExecutor(agent)
     
     # Execute in background
     asyncio.create_task(executor.execute(context, event_queue))
@@ -471,13 +256,14 @@ async def handle_message(request):
 
 ---
 
-## 🎉 **Ready for Production**
+## 🎉 **Ready for Development**
 
-When all tests pass, your executor provides:
+This testing framework provides:
 
-- ✅ **A2A Protocol Compliance**: Full adherence to A2A specifications
-- ✅ **Starlette Integration**: Seamless SSE streaming support
-- ✅ **Error Resilience**: Graceful handling of all edge cases
-- ✅ **State Management**: Proper task lifecycle management
-- ✅ **Event Streaming**: Real-time updates to clients
-- ✅ **Delegation Support**: Ready for multi-agent workflows 
+- ✅ **Clear Architecture**: ResponseFormat-based design
+- ✅ **Comprehensive Testing**: All A2A scenarios covered
+- ✅ **Starlette Compliance**: Event streaming validated
+- ✅ **Development Guidance**: Reference implementation provided
+- ✅ **Error Handling**: Exception scenarios tested
+
+Focus on implementing your new executor using `TestAgentExecutor` as a guide, and the tests will ensure A2A compliance! 

@@ -78,8 +78,11 @@ Make sure your final response is a valid XML schema follow the below Response Sc
 <output>
     <action>( Action to be taken, either respond directly or delegate to another agent. Literal["answer", "call_next_agent"] )</action>
     <status>( Literal['input_required', 'completed', 'error', 'hang_up'] )</status>
+    <custom_status>( Optional custom state such as 'hang_up', 'timeout', etc. for extended flow semantics. Default as ' ' )</custom_status>
     <agent_name>( Name of the agent responsible for the current response from available remote agent, if action is call_next_agent.)</agent_name>
     <message>( The message to deliver to the user or to another agent. )</message>
+    <next_agent_instruction>( Message content, passed to the next agent as an instruction TODO )</next_agent_instruction>
+    <next_agent_schema>( Schema-compatible dictionary containing input data for the next agent, if applicable. )</next_agent_schema>
 </output>
 """
 
@@ -132,8 +135,11 @@ Make sure your final response is a valid XML schema follow the below Response Sc
 <output>
     <action>( Action to be taken, either respond directly or delegate to another agent. Literal["answer", "call_next_agent"] )</action>
     <status>( Literal['input_required', 'completed', 'error', 'hang_up'] )</status>
+    <custom_status>( Optional custom state such as 'hang_up', 'timeout', etc. for extended flow semantics. Default as ' ' )</custom_status>
     <agent_name>( Name of the agent responsible for the current response from available remote agent, if action is call_next_agent.)</agent_name>
     <message>( The message to deliver to the user or to another agent. )</message>
+    <next_agent_instruction>( Message content, passed to the next agent as an instruction TODO )</next_agent_instruction>
+    <next_agent_schema>( Schema-compatible dictionary containing input data for the next agent, if applicable. )</next_agent_schema>
 </output>
 """
 

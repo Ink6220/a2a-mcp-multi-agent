@@ -26,6 +26,8 @@ from a2a.types import TaskState, TextPart, Task, Message, Part, Role
 from a2a.utils import new_agent_text_message, new_task
 
 
+# This is a mock executor that is used to test the execute() method
+# To test a new executor, replace A2ACompliantExecutor with the new executor
 class A2ACompliantExecutor:
     """
     A2A Protocol Compliant Executor for ResponseFormat objects
@@ -96,42 +98,26 @@ class A2ACompliantExecutor:
             print(f"   Message: {response_obj.message}")
             
             # Handle response based on A2A protocol and ResponseFormat status
-            if response_obj.status == "completed":
-                # Agent is asking for another agent input
-                if response_obj.action == "call_next_agent":
-                    # Agent delegation scenario
-                    print(f"🔄 Delegating to agent: {response_obj.agent_name}")
-                    
-                    # Create artifact with delegation information
-                    delegation_content = {
-                        "message": response_obj.message,
-                        "delegate_to": response_obj.agent_name,
-                        "instruction": response_obj.next_agent_instruction,
-                        "action": response_obj.action,
-                        "status": response_obj.status
-                    }
-                    
-                    # Use real A2A Part and TextPart
-                    part = Part(root=TextPart(text=json.dumps(delegation_content, indent=2)))
-                    updater.add_artifact(
-                        [part], 
-                        name=f'{self.agent.agent_name}-delegation'
-                    )
-                    updater.complete()
-                    
-                    # NOTE: In real implementation, this would trigger the actual
-                    # agent-to-agent call here, but for testing we just complete
-                    
-                else:
-                    # Normal task completion - use real A2A types
-                    part = Part(root=TextPart(text=response_obj.message))
-                    updater.add_artifact(
-                        [part], 
-                        name=f'{self.agent.agent_name}-result'
-                    )
-                    updater.complete()
+            # Delegation: action == 'call_next_agent' (status should be 'input_required')
+            if response_obj.action == "call_next_agent":
+                # Agent delegation scenario: emit input_required, not completed
+                print(f"🔄 Delegating to agent: {response_obj.agent_name} (input_required)")
+                delegation_message = new_agent_text_message(
+                    response_obj.message,
+                    task.contextId,
+                    task.id,
+                )
+                updater.update_status(TaskState.input_required, delegation_message, final=True)
+                # Do NOT mark as completed or add artifact here
+            elif response_obj.status == "completed":
+                # Normal task completion - use real A2A types
+                part = Part(root=TextPart(text=response_obj.message))
+                updater.add_artifact(
+                    [part], 
+                    name=f'{self.agent.agent_name}-result'
+                )
+                updater.complete()
 
-            # Agent is asking for user input
             elif response_obj.status == "input_required" and response_obj.action == "answer":
                 # Task requires user input - pause and wait
                 print("⏸️  Task paused - waiting for user input")
@@ -145,7 +131,6 @@ class A2ACompliantExecutor:
             elif response_obj.status == "failed":
                 # Task failed - mark as failed (not input_required)
                 print("❌ Task failed")
-                # TODO: here the failure reason is passed as a message 
                 failed_message = new_agent_text_message(
                     response_obj.message,
                     task.contextId,
@@ -206,7 +191,7 @@ async def simulate_starlette_request(agent, user_message: str):
     # Use our collector instead of monkey patching
     event_collector = EventCollector()
     
-    # Create A2A-compliant executor and run with collector
+    # Create A2A-compliant executor and run with collector Here is where the execute() method to be tested is called
     executor = A2ACompliantExecutor(agent)
     await executor.execute(context, event_collector)
     
@@ -285,17 +270,18 @@ async def test_a2a_executor_scenarios():
     # Test 4: Agent delegation
     print("\n" + "="*60)
     print("TEST 4: Agent Delegation")
-    print("Expected: Task → TaskStatusUpdate(working) → TaskArtifactUpdate(delegation) → TaskStatusUpdate(completed)")
+    print("Expected: Task → TaskStatusUpdate(working) → TaskStatusUpdate(input_required, final=True)")
     delegation_agent = get_delegation_agent()
     events4 = await simulate_starlette_request(delegation_agent, "Please delegate this task")
     
     # Verify delegation handling with real A2A events
     has_task = any(isinstance(e, Task) for e in events4)
     has_working = any(hasattr(e, 'status') and hasattr(e.status, 'state') and e.status.state == TaskState.working for e in events4)
-    has_delegation = any(hasattr(e, 'artifact') and hasattr(e.artifact, 'name') and 'delegation' in e.artifact.name for e in events4)
-    has_completed = any(hasattr(e, 'status') and hasattr(e.status, 'state') and e.status.state == TaskState.completed for e in events4)
-    success4 = has_task and has_working and has_delegation and has_completed
-    print(f"✅ A2A Compliance: Task={has_task}, Working={has_working}, Delegation={has_delegation}, Completed={has_completed}")
+    has_input_required = any(hasattr(e, 'status') and hasattr(e.status, 'state') and e.status.state == TaskState.input_required for e in events4)
+    has_final = any(hasattr(e, 'final') and e.final == True for e in events4)
+    no_completed = not any(hasattr(e, 'status') and hasattr(e.status, 'state') and e.status.state == TaskState.completed for e in events4)
+    success4 = has_task and has_working and has_input_required and has_final and no_completed
+    print(f"✅ A2A Compliance: Task={has_task}, Working={has_working}, InputRequired={has_input_required}, Final={has_final}, NoCompleted={no_completed}")
     print(f"✅ Test Result: {'PASSED' if success4 else 'FAILED'}")
     
     # Test 5: Exception handling (should be failed, not input_required)

@@ -83,7 +83,7 @@ def get_delegation_agent() -> MockAgent:
     """Returns an agent that simulates delegating to another agent."""
     return MockAgent({
         "action": "call_next_agent",
-        "status": "completed",
+        "status": "input_required",
         "message": "Delegating task to specialist-agent.",
         "agent_name": "specialist-agent",
         "next_agent_instruction": "Please handle this specialized request"

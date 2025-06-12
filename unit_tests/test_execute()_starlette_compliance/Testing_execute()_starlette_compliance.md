@@ -104,9 +104,22 @@ python unit_test_starlette.py
 - **Verification**: Task is marked as failed with appropriate error handling
 
 ### **4. Agent Delegation**
-- **Agent Returns**: `ResponseFormat(action="call_next_agent", status="completed", ...)`
-- **Expected Events**: `task_created` → `status_update(working)` → `artifact` → `task_complete`
-- **Verification**: The `ResponseFormat` object, including delegation fields, is saved as the artifact
+- **Agent Returns**: `ResponseFormat(action="call_next_agent", status="input_required", ...)`
+- **Expected Events**: `task_created` → `status_update(working)` → `status_update(input_required, final=True)`
+- **Verification**: The message is passed up to the user (CLI client) with state `input_required`. Only after the delegated agent (expert) returns and the original agent finishes, the executor emits `completed`.
+
+#### **Usage Example:**
+```python
+from mock_agent import get_delegation_agent
+# Get an agent that simulates delegation (input_required)
+delegation_agent = get_delegation_agent()
+```
+
+#### **State Mapping:**
+- `action="call_next_agent"` (with `status="input_required"`) → `input_required` (delegation, message passed up)
+- `status="completed"` (and not delegation) → Task completes, artifact created
+- `status="input_required"` (and not delegation) → Task pauses, awaiting user input
+- `status="failed"` → Task fails, error handling
 
 ### **5. Error Handling**
 - **Agent Action**: `invoke()` raises an exception
@@ -123,14 +136,15 @@ The new executor is the bridge between the agent's `ResponseFormat` object and t
 1. **Agent `invoke()`**: Returns a `ResponseFormat` object
 2. **Executor Receives Object**: The `execute` method gets this object
 3. **Executor Reads Attributes**: It accesses attributes like `response.status` and `response.action` to decide the next state
-4. **Executor Creates Artifact**: It uses the `ResponseFormat` object (or its dictionary representation) as the payload for `updater.add_artifact()`
-5. **A2A Events**: The executor generates the standard A2A event stream for the client
+4. **Delegation**: If `action="call_next_agent"`, the executor emits `input_required` and passes the message up to the user. Only after the expert returns and the original agent finishes does it emit `completed`.
+5. **Executor Creates Artifact**: It uses the `ResponseFormat` object (or its dictionary representation) as the payload for `updater.add_artifact()` (on completion)
+6. **A2A Events**: The executor generates the standard A2A event stream for the client
 
 #### **State Mapping:**
-- `status="completed"` → Task completes, artifact created
-- `status="input_required"` → Task pauses, awaiting user input
+- `action="call_next_agent"` (with `status="input_required"`) → `input_required` (delegation, message passed up)
+- `status="completed"` (and not delegation) → Task completes, artifact created
+- `status="input_required"` (and not delegation) → Task pauses, awaiting user input
 - `status="failed"` → Task fails, error handling
-- `action="call_next_agent"` → Delegation mode, artifact contains next agent info
 
 This architecture ensures that the agent's internal logic is cleanly separated from the A2A protocol implementation, with the `ResponseFormat` object serving as the contract.
 

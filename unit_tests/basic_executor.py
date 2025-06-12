@@ -3,24 +3,16 @@
 
 import logging
 
-from a2a.server.agent_execution import AgentExecutor, RequestContext
 from a2a.server.events import EventQueue
 from a2a.server.tasks import TaskUpdater
-from a2a.types import (
-    InvalidParamsError,
-    Part,
-    Task,
-    TaskState,
-    TextPart,
-    UnsupportedOperationError,
-)
+from a2a.types import TaskState, TextPart, Task, Message, Part, Role
 from a2a.utils import new_agent_text_message, new_task
-from a2a.utils.errors import ServerError
-from a2a_mcp.common.base_agent.base_agent import BaseAgent
+from a2a.server.agent_execution import AgentExecutor, RequestContext
+from uuid import uuid4
 
 logger = logging.getLogger(__name__)
 
-class A2ACompliantExecutor(AgentExecutor):
+class GenericAgentExecutor(AgentExecutor):
     """
     A2A Protocol Compliant Executor for ResponseFormat objects
     Inherits from AgentExecutor for full A2A SDK compatibility.

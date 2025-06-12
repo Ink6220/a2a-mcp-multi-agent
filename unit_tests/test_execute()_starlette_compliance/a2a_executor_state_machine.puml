@@ -1,0 +1,62 @@
+@startuml
+' A2A Executor State Machine for Starlette Compliance
+' Comprehensive, readable reference for implementers
+' ---------------------------------------------------
+' Legend:
+'  - Blue: Normal user/agent flow
+'  - Orange: Delegation (call_next_agent)
+'  - Red: Error/failure
+
+skinparam state {
+  BackgroundColor<<User>> #D6EAF8
+  BackgroundColor<<Delegation>> #FDEBD0
+  BackgroundColor<<Error>> #F5B7B1
+  BorderColor Black
+  FontSize 14
+}
+
+[*] --> Working : Task Created
+
+state Working <<User>> {
+  [*] --> working
+  working : Agent invoke() called\nEmits TaskStatusUpdate(working)
+  working --> InputRequired : status="input_required"\naction="answer"\n(User input required)
+  working --> InputRequired <<Delegation>> : action="call_next_agent"\nstatus="input_required"\n(Delegation)
+  working --> Completed : status="completed"\naction="answer"\n(Task completed)
+  working --> Failed <<Error>> : status="failed"\n(Task failed)
+  working --> Failed <<Error>> : Exception\n(Internal error)
+}
+
+state InputRequired <<User>> {
+  InputRequired : Emits TaskStatusUpdate(input_required, final=True)
+  InputRequired --> Working : User provides input\n(Resumes agent)
+  InputRequired --> Working : Expert agent returns\n(Delegation resumes)
+}
+
+Completed : Emits TaskArtifactUpdate\n+ TaskStatusUpdate(completed)
+Failed : Emits TaskStatusUpdate(failed, final=True)
+
+Completed --> [*] : Task Done
+Failed --> [*] : Task Failed
+
+' Key protocol notes
+note top of Working
+  Blue: User/agent normal flow
+  Orange: Delegation (call_next_agent)
+  Red: Error/failure
+end note
+
+note right of InputRequired
+  - If delegation: message passed up to user/CLI
+  - If user input: waits for user
+end note
+
+note right of Completed
+  Task is finished, artifact created
+end note
+
+note right of Failed
+  Task failed or exception occurred
+end note
+
+@enduml 

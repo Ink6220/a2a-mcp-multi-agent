@@ -31,9 +31,9 @@ class A2ANovaAgent(BaseAgent):
         # TODO: Still need memory manager here?
         print("=============== Using Nova ===============")
 
-    async def invoke(self, query, context_id: str, task_id: str):
+    async def invoke(self, query, context_id: str, task_id: str) -> ResponseFormat:
         history = "" # TODO: Load Memory
-        agent_info = self.card_discovery.get_remote_agent_info() # TODO: Add agent discovery information
+        agent_info = self.card_discovery.get_remote_agent_info()
         session = self.mcp_server[0]
         tools_result = await session.list_tools()
         tools_list = [{"name": tool.name, "description": tool.description,
@@ -117,9 +117,7 @@ class A2ANovaAgent(BaseAgent):
 
         # TODO: Shold we save conversation history here ? 
 
-        # TODO: Refactor invoke() to return response_object instead of yielding it
-        # return self.parse_agent_response(response_object)
-        yield response_object
+        return response_object
 
     async def stream(self, query, sessionId) -> AsyncIterable[Dict[str, Any]]:
         history = "" # TODO: Load Memory

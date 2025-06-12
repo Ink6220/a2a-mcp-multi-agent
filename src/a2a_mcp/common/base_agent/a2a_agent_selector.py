@@ -16,7 +16,7 @@ class A2AAgentSelector:
         if self.provider == "aws":
             return A2ANovaAgent(agent_card=self.agent_card, card_discovery=self.card_discovery, mcp_server=self.mcp_server)
         elif self.provider == "openai":
-            return A2AOpenaiAgentNative(agent_card=self.agent_card, card_discovery=self.card_discovery, mcp_server=self.mcp_server)
+            return A2AOpenaiAgent(agent_card=self.agent_card, card_discovery=self.card_discovery, mcp_server=self.mcp_server)
         else:
             raise ValueError(f"Unsupported provider: {self.provider}")
 

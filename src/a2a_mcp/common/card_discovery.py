@@ -61,3 +61,6 @@ class A2ACardDiscovery:
     
     def get_remote_agent_cards(self) -> dict[str, CustomAgentCard]:
         return self.remote_agent_cards
+    
+    def get_remote_agent_card_by_name(self, name) -> CustomAgentCard:
+        return self.remote_agent_cards[name]

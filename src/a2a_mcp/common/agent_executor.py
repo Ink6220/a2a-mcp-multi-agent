@@ -13,13 +13,19 @@ from a2a.types import (
     TaskStatusUpdateEvent,
     TextPart,
     UnsupportedOperationError,
-    InternalError
+    InternalError,
+    MessageSendParams,
+    MessageSendConfiguration,
+    Message,
 )
+from uuid import uuid4
+import json
 from a2a.utils import new_agent_text_message, new_task
 from a2a.utils.errors import ServerError
 from a2a_mcp.common.base_agent.base_agent import BaseAgent, ResponseFormat
 logger = logging.getLogger(__name__)
-
+import httpx  
+from a2a_mcp.common.remote_agent_connection import RemoteAgentConnections
 
 class GenericAgentExecutor(AgentExecutor):
     """AgentExecutor used by the tragel agents."""
@@ -100,6 +106,37 @@ class GenericAgentExecutor(AgentExecutor):
                     )
             elif item.action == "call_next_agent":
                 # TODO: Task delegator when action space is call_next_agent to item.agent_name
+
+                # https://github.com/dmesquita/multi-agent-communication-a2a-python/blob/main/server_event_detection_a2a.py
+                async with httpx.AsyncClient() as httpx_client:
+                    remote_agent_card =  self.agent.card_discovery.get_remote_agent_card_by_name(item.agent_name)
+                    remote_agent_connection = RemoteAgentConnections(httpx_client, remote_agent_card)
+
+                    message = Message(
+                        role="user",
+                        parts=[TextPart(text=item.next_agent_instruction), DataPart(data=json.loads(item.next_agent_schema))],
+                        messageId=str(uuid4()),
+                        taskId=str(uuid4()), # TODO: generate task_id
+                        contextId=task.contextId, # TODO: Get contextId
+                    )
+
+                    payload = MessageSendParams(
+                        id=str(uuid4()),
+                        message=message,
+                        configuration=MessageSendConfiguration(
+                            acceptedOutputModes=["text"],
+                        ),
+                    )
+
+                    async for event in remote_agent_connection.send_message_streaming(payload):
+                        if isinstance(event, Message):
+                            print("Final message:", event)
+                        elif isinstance(event, TaskStatusUpdateEvent):
+                            print("Status update:", event)
+                        elif isinstance(event, TaskArtifactUpdateEvent):
+                            print("Artifact update:", event)
+                        else:
+                            print("Other event:", event)
 
                 # Mockup Artifact back to client
                 # Always create a TextPart for the response content

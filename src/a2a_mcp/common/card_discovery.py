@@ -37,7 +37,7 @@ class A2ACardDiscovery:
 
         agent_info = []
         for ra in self.list_remote_agents():
-            agent_info.append(json.dumps(ra))
+            agent_info.append(json.dumps(ra, ensure_ascii=False))
         self.remote_agent_info = '\n'.join(agent_info)
         print(Fore.BLUE + Style.BRIGHT + "[Discovery]:" + Style.RESET_ALL, time.time() - start_time)
         return self.remote_agent_cards, self.remote_agent_info
@@ -50,10 +50,12 @@ class A2ACardDiscovery:
 
         remote_agent_info = []
         for card in self.remote_agent_cards.values():
-            # TODO: Fix unicode escape when receive Thai character
-            remote_agent_info.append(
-                {"name": card.name, "description": card.description, "skill": [s.model_dump() for s in card.skills]}
-            )
+            remote_agent_info.append({
+                "name": card.name,
+                "description": card.description,
+                "skill": [s.model_dump() for s in card.skills]
+            })
+        
         return remote_agent_info
     
     def get_remote_agent_info(self) -> str:

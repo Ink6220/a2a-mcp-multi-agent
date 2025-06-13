@@ -45,5 +45,5 @@
     ],
     "modelName":"gpt-4.1-mini",
     "systemPrompt": "",
-    "nextAgent": []
+    "nextAgent": ["http://localhost:10001/"]
 }

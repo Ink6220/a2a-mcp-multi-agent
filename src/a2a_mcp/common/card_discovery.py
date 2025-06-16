@@ -21,11 +21,11 @@ class A2ACardDiscovery:
         if self.agent_card.nextAgent == []:
             self.remote_agent_info = ""
             print(Fore.BLUE + Style.BRIGHT + "[No-Next-Agent-To-Discovery]" + Style.RESET_ALL)
-            return self.remote_agent_info
+            return self.remote_agent_cards, self.remote_agent_info
         
         if self.remote_agent_info != None and not self._cache_dirty:
             print(Fore.BLUE + Style.BRIGHT + "[Discovery-Cache]:" + Style.RESET_ALL, time.time() - start_time)
-            return self.remote_agent_info
+            return self.remote_agent_cards, self.remote_agent_info
         
         self._cache_dirty = False
         agent_card_list = await session.find_resource("resource://agent_cards/list")

@@ -1,7 +1,7 @@
 {
-    "name": "Presale Agent",
-    "description": "Initiate contact, qualify customer availability. Only call this agent to ask for availability only, otherwise call other agent. Input format: {{user_question}}",
-    "url": "http://localhost:10001/",
+    "name": "PromoAdvisor Agent",
+    "description": "Present details, answer basic questions, log interest. Can only call this agent when customer tells that they available.",
+    "url": "http://localhost:10002/",
     "provider": {
         "organization": "openai",
         "url":"None"
@@ -29,21 +29,21 @@
     ],
     "skills": [
         {
-            "id": "greet_and_introduce",
-            "name": "Greet and introduce the promotion",
-            "description": "Helps Initiate contact to customer and qualify customer availability.",
+            "id": "check_car_brand",
+            "name": "Check car brand",
+            "description": "Check car brand from model name. require (model_name: str)",
             "tags": [
-                "Greeting",
-                "Asking customer availability"
+                "Car Brand"
             ],
             "examples": [
-                "สวัสดี"
+                "{\"model_name\": มาสด้า}",
+                "{\"model_name\": โตโยต้า}"
             ],
-            "inputModes": null,
-            "outputModes": null
+            "inputModes": ["application/json"],
+            "outputModes": ["text/html"]
         }
     ],
     "modelName":"gpt-4.1-mini",
     "systemPrompt": "",
-    "nextAgent": ["http://localhost:10002/"]
+    "nextAgent": ["http://localhost:10001/"]
 }

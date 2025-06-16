@@ -21,11 +21,11 @@ class A2ACardDiscovery:
         if self.agent_card.nextAgent == []:
             self.remote_agent_info = ""
             print(Fore.BLUE + Style.BRIGHT + "[No-Next-Agent-To-Discovery]" + Style.RESET_ALL)
-            return self.remote_agent_info
+            return self.remote_agent_cards, self.remote_agent_info
         
         if self.remote_agent_info != None and not self._cache_dirty:
             print(Fore.BLUE + Style.BRIGHT + "[Discovery-Cache]:" + Style.RESET_ALL, time.time() - start_time)
-            return self.remote_agent_info
+            return self.remote_agent_cards, self.remote_agent_info
         
         self._cache_dirty = False
         agent_card_list = await session.find_resource("resource://agent_cards/list")
@@ -37,7 +37,7 @@ class A2ACardDiscovery:
 
         agent_info = []
         for ra in self.list_remote_agents():
-            agent_info.append(json.dumps(ra))
+            agent_info.append(json.dumps(ra, ensure_ascii=False))
         self.remote_agent_info = '\n'.join(agent_info)
         print(Fore.BLUE + Style.BRIGHT + "[Discovery]:" + Style.RESET_ALL, time.time() - start_time)
         return self.remote_agent_cards, self.remote_agent_info
@@ -50,9 +50,12 @@ class A2ACardDiscovery:
 
         remote_agent_info = []
         for card in self.remote_agent_cards.values():
-            remote_agent_info.append(
-                {"name": card.name, "description": card.description}
-            )
+            remote_agent_info.append({
+                "name": card.name,
+                "description": card.description,
+                "skill": [s.model_dump() for s in card.skills]
+            })
+        
         return remote_agent_info
     
     def get_remote_agent_info(self) -> str:
@@ -60,3 +63,6 @@ class A2ACardDiscovery:
     
     def get_remote_agent_cards(self) -> dict[str, CustomAgentCard]:
         return self.remote_agent_cards
+    
+    def get_remote_agent_card_by_name(self, name) -> CustomAgentCard:
+        return self.remote_agent_cards[name]

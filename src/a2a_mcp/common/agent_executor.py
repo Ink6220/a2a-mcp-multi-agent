@@ -19,39 +19,57 @@ from a2a.types import (
 from a2a.utils import new_agent_text_message, new_task
 from a2a.utils.errors import ServerError
 from a2a_mcp.common.base_agent.base_agent import BaseAgent, ResponseFormat
+from a2a_mcp.common.context_memory import ContextMemory
 logger = logging.getLogger(__name__)
 
 
 class GenericAgentExecutor(AgentExecutor):
     """AgentExecutor used by the tragel agents."""
 
-    def __init__(self, agent: BaseAgent, task_store: InMemoryTaskStore):
+    def __init__(self, agent: BaseAgent, task_store: InMemoryTaskStore):  
         self.agent = agent
         self.task_store = task_store
+        self.context_store = ContextMemory()
 
-    def postprocess(self, history_data: Task) -> str:
-        lines = []
-        if not history_data :
-            return None
-        for message in history_data.history:
-            if hasattr(message, 'kind') and message.kind == 'message':
-                if message.parts:
-                    parts = []
-                    for part in message.parts:
-                        if hasattr(part, 'root'):
-                            root_part = part.root
-                            match root_part:
-                                case TextPart():
-                                    parts.append(root_part.text)
-                                case DataPart():
-                                    parts.append(f"[Data: {json.dumps(part.data)}]")
-                                case FilePart():
-                                    parts.append(f"[File: {root_part.file.name}]")
-                                case _:
-                                    parts.append(str(root_part))
+    def postprocess(self, context_store: ContextMemory) -> str:
+        """Process history from all tasks in the context memory
         
-                    if parts:
-                        lines.append(f"{message.role}: {' '.join(parts)}")
+        Args:
+            context_store: ContextMemory containing multiple tasks
+            
+        Returns:
+            str: Formatted history from all tasks
+        """
+        lines = []
+        
+        # Process all tasks in the context memory
+        for task in context_store.tasks:
+            if task.history:
+                lines.append(f"=== Task {task.id} ===")
+                for message in task.history:
+                    if hasattr(message, 'kind') and message.kind == 'message':
+                        if message.parts:
+                            parts = []
+                            for part in message.parts:
+                                if hasattr(part, 'root'):
+                                    root_part = part.root
+                                    if hasattr(root_part, 'text'):
+                                        parts.append(root_part.text)
+                                    elif hasattr(root_part, 'data'):
+                                        parts.append(f"[Data: {json.dumps(root_part.data)}]")
+                                    elif hasattr(root_part, 'file') and hasattr(root_part.file, 'name'):
+                                        parts.append(f"[File: {root_part.file.name}]")
+                                    else:
+                                        parts.append(str(root_part))
+                                else:
+                                    if hasattr(part, 'text'):
+                                        parts.append(part.text)
+                                    else:
+                                        parts.append(str(part))
+            
+                            if parts:
+                                lines.append(f"{message.role}: {' '.join(parts)}")
+                lines.append("")
         return "\n".join(lines)
 
     async def execute(
@@ -72,14 +90,27 @@ class GenericAgentExecutor(AgentExecutor):
             task = new_task(context.message)
             event_queue.enqueue_event(task)
 
-        updater = TaskUpdater(event_queue, task.id, task.contextId)
-        
-        history = await self.task_store.get(task.id)  # Ensure the task exists in the store
-        if(history): logger.info(f'History: {history.model_dump_json(indent=2, exclude_none=True)}')
-        history = self.postprocess(history)
+        task_id = context.task_id
+        context_id = context.context_id
+
+        updater = TaskUpdater(event_queue, task.id, context_id)
+        existing_task = self.context_store.get_task(task_id)
+
+        if existing_task:
+            # Update existing task
+            self.context_store.update_task(task_id, task)
+            logger.info(f'Updated existing task {task_id} in context memory')
+        else:
+            # Add new task
+            self.context_store.add_task(task)
+            logger.info(f'Added new task {task_id} to context memory')
+
+        task_history = await self.task_store.get(task_id)
+        if(task_history): logger.info(f'History: {task_history.model_dump_json(indent=2, exclude_none=True)}')
+        history = self.postprocess(self.context_store)
 
         # TODO: Implement agent.stream() later
-        async for item in self.agent.invoke(query, task.contextId, task.id, history):
+        async for item in self.agent.invoke(query, context_id, task_id, history):
             # Agent to Agent call will return events,
             # Update the relevant ids to proxy back.
             if hasattr(item, 'root') and isinstance(

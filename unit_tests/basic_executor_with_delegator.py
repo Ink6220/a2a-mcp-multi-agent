@@ -11,7 +11,7 @@ from a2a.types import TaskState, TextPart, Task, Message, Part, Role, AgentCard
 from a2a.utils import new_agent_text_message, new_task
 from a2a.server.agent_execution import AgentExecutor, RequestContext
 from uuid import uuid4
-from a2a_mcp.common.task_delegator import task_delegator
+from a2a_mcp.common.task_delegator import TaskDelegator
 from typing import AsyncGenerator, List, Dict, Any
 
 logger = logging.getLogger(__name__)
@@ -27,7 +27,7 @@ class GenericAgentExecutor(AgentExecutor):
     def __init__(self, agent):
         super().__init__()
         self.agent = agent
-        self.delegator: task_delegator
+        self.delegator: TaskDelegator
         self.ongoing_tasks: list[AsyncGenerator[dict, None]] = []
 
     async def execute(self, context: RequestContext, event_queue):
@@ -65,7 +65,7 @@ class GenericAgentExecutor(AgentExecutor):
         # Create real A2A TaskUpdater for proper state management
         updater = TaskUpdater(event_queue, task.id, task.contextId)
 
-        self.delegator = task_delegator(updater, self.agent, task.contextId) # instantiate the delegator
+        self.delegator = TaskDelegator(updater, self.agent, task.contextId) # instantiate the delegator
 
 
         working_message = new_agent_text_message(
@@ -88,7 +88,7 @@ class GenericAgentExecutor(AgentExecutor):
                     task.contextId,
                     task.id,
                 )
-                updater.update_status(TaskState.input_required, delegation_message, final=True)
+                updater.update_status(TaskState.input_required, delegation_message, final=False)
 
                 # Send message to the next agent
                 stream = await self.delegator.delegate_task(response_obj)

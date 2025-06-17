@@ -1,4 +1,4 @@
-from a2a_mcp.common.base_agent.base_agent import BaseAgent, ResponseFormat
+from a2a_mcp.common.base_agent.base_agent import BaseAgent, ResponseFormat, Usage, ExtraUsage
 from a2a_mcp.common.prompts import A2A_NOVA_BASE_PROMPT
 import boto3
 import json
@@ -15,7 +15,7 @@ from a2a_mcp.common.types import CustomAgentCard
 from a2a_mcp.common.card_discovery import A2ACardDiscovery
 import time
 from colorama import Fore, Style, init
-
+from uuid import uuid4
 class A2ANovaAgent(BaseAgent):
     def __init__(self, agent_card: CustomAgentCard, card_discovery: A2ACardDiscovery, mcp_server: list=[]):
         super().__init__(agent_card.modelName, agent_card, card_discovery)  # Call BaseAgent's __init__
@@ -32,6 +32,7 @@ class A2ANovaAgent(BaseAgent):
         print("=============== Using Nova ===============")
 
     async def invoke(self, query, context_id: str, task_id: str) -> ResponseFormat:
+        usage_id = str(uuid4())
         history = "" # TODO: Load Memory
         agent_info = self.card_discovery.get_remote_agent_info()
         session = self.mcp_server[0]
@@ -40,12 +41,12 @@ class A2ANovaAgent(BaseAgent):
           "inputSchema": tool.inputSchema} for tool in tools_result]
         print("Accessible tools: ", [tool['name'] for tool in tools_list])
 
-        inst = self.root_instruction(chat_history=history, tools=json.dumps(tools_list, ensure_ascii=False), agent_info=agent_info)
-        print(inst)
+        instruction = self.root_instruction(chat_history=history, tools=json.dumps(tools_list, ensure_ascii=False), agent_info=agent_info)
+        print(instruction)
 
         system = [
             {
-                "text": inst
+                "text": instruction
             }
         ]
 
@@ -55,6 +56,12 @@ class A2ANovaAgent(BaseAgent):
                 "content": [{"text": query}]
             }
         ]
+
+        api_usage = {
+            "prompt_tokens": 0,
+            "completion_tokens": 0
+        }
+
         start_time = time.time()
         while True:
             response = self.bedrock_client.converse(
@@ -68,6 +75,8 @@ class A2ANovaAgent(BaseAgent):
                 toolConfig=self.convert_tool_format(tools_result)
             )
             print(json.dumps(response, indent=4, ensure_ascii=False))
+            api_usage["prompt_tokens"] += response['usage']['inputTokens']
+            api_usage["completion_tokens"] += response['usage']['outputTokens']
 
             output_message = response['output']['message']
             messages.append(output_message)
@@ -116,6 +125,20 @@ class A2ANovaAgent(BaseAgent):
         print(response_object)
 
         # TODO: Shold we save conversation history here ? 
+
+        usage = Usage(
+            usage_id=usage_id,
+            context_id=context_id,
+            task_id=task_id,
+            model_name=self.model_name,
+            user_input=query,
+            output=response_object,
+            prompt_tokens=api_usage['prompt_tokens'],
+            completion_tokens=api_usage['completion_tokens'],
+            extra_usage=None
+        )
+        self.record_usage(usage)
+        print(usage)
 
         return response_object
 

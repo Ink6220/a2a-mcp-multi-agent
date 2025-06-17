@@ -13,6 +13,13 @@ from colorama import Fore, Style, init
 
 from pydantic import BaseModel, Field, ValidationError, model_validator
 from typing import Literal, Optional, Dict, Any
+from datetime import datetime, timezone, timedelta
+
+# Define UTC+7 timezone
+UTC_PLUS_7 = timezone(timedelta(hours=7))
+
+def current_time_utc7_str() -> str:
+    return datetime.now(UTC_PLUS_7).isoformat()
 
 class ResponseFormat(BaseModel):
     """Standardized response for LLM Agent interactions."""
@@ -50,7 +57,7 @@ class ResponseFormat(BaseModel):
         description="Message content, passed to the next agent as an instruction TODO"
     )
     
-    artifacts: Optional[Dict[str, Union[str, float, int, bool, None, List[Any], Dict[str, Any]]]] = Field(
+    artifacts: Optional[str] = Field(
         default=None,
         description="Optional structured JSON data to be passed as artifacts; must be JSON-serializable."
     )
@@ -64,10 +71,27 @@ class ResponseFormat(BaseModel):
                 raise ValueError("`next_agent_instruction` is required when action is 'call_next_agent'")
         return self
 
+class ExtraUsage(BaseModel):
+    reasoning_tokens: int
+    cache_tokens: int
+
+class Usage(BaseModel):
+    usage_id: str
+    context_id: str
+    task_id: str
+    model_name: str
+    user_input: str
+    output: ResponseFormat
+    prompt_tokens: int
+    completion_tokens: int
+    extra_usage: Optional[ExtraUsage] = None
+    timestamp: str = Field(default_factory=current_time_utc7_str)
+
 class BaseAgent(ABC):
     def __init__(self, model_name: str, agent_card: CustomAgentCard, card_discovery: A2ACardDiscovery):
         self.model_name = model_name
         self.agent_card: CustomAgentCard = agent_card
+        self._usage_logs: Dict[str, Usage] = {}
 
         # TODO: Previous implementation was doing agent discovery inside BaseAgent class -> Fix this on Task: Agent Discovery from MCP Server 
         # The cache is always dirty at startup, so that we discovery at least once
@@ -88,7 +112,7 @@ class BaseAgent(ABC):
 
 
     @abstractmethod
-    async def invoke(self, query: str, context_id: str, task_id: str) -> Dict[str, Any]:
+    async def invoke(self, query: str, context_id: str, task_id: str, history: str) -> ResponseFormat:
         """Invoke the agent with a query and return a single response."""
         pass
 
@@ -125,3 +149,10 @@ class BaseAgent(ABC):
     ) -> AsyncGenerator[dict, None]:
         """Form a connection and stream messages to a remote agent by name, yielding events as they arrive."""
         pass
+
+
+    def record_usage(self, usage: Usage) -> None:
+        self._usage_logs[usage.usage_id] = usage
+
+    def get_usage_by_usage_id(self, usage_id: str) -> Optional[Usage]:
+        return self._usage_logs.get(usage_id)

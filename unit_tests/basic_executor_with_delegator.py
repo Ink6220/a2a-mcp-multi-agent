@@ -1,5 +1,4 @@
 ## This is a very simple executor that just calls invoke() and handles the response based on the A2A protocol
-## This is used to test the invoke() method of the agent
 
 import logging
 import asyncio
@@ -79,7 +78,8 @@ class GenericAgentExecutor(AgentExecutor):
         updater.update_status(TaskState.working, working_message)
         try:
             session_id = task.contextId
-            response_dict = await self.agent.invoke(query, session_id, task.id)
+            history = "" # TODO: Load Memory
+            response_dict = await self.agent.invoke(query, session_id, task.id, history)
             
             # Convert dict back to ResponseFormat for easier handling
             response_obj = ResponseFormat(**response_dict)

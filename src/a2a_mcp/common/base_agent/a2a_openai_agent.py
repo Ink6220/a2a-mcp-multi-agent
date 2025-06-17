@@ -45,12 +45,12 @@ class A2AOpenaiAgent(BaseAgent):
             
         )
          
-    async def invoke(self, query: str, context_id: str, task_id: str) -> ResponseFormat:
+    async def invoke(self, query: str, context_id: str, task_id: str, history: str) -> ResponseFormat:
         # TODO: maybe we should go through together on invoke(), if we are going to change response format etc (im not too clear on this)
         usage_id = str(uuid4())
         result = None
         try:
-            history = "" # TODO: Load Memory
+            # history = "" # TODO: Load Memory
             agent_info = self.card_discovery.get_remote_agent_info()
             instruction, self.agent = self.get_agent(history, agent_info)
             print(Fore.GREEN + Style.BRIGHT + "Init agent complete" + Style.RESET_ALL)
@@ -87,7 +87,7 @@ class A2AOpenaiAgent(BaseAgent):
                     message="The response format was invalid.",
                     agent_name=None,
                     next_agent_instruction=None,
-                    next_agent_schema=None
+                    artifacts=None
                 )
 
         except OpenAIError as e:
@@ -100,7 +100,7 @@ class A2AOpenaiAgent(BaseAgent):
                 message="We are unable to process your request at the moment. Please try again.",
                 agent_name=None,
                 next_agent_instruction=None,
-                next_agent_schema=None
+                artifacts=None
             )
 
     async def stream(self, query: str, context_id: str, task_id: str) -> AsyncGenerator[Dict[str, Any], None]:
@@ -288,7 +288,7 @@ class A2AOpenaiAgent(BaseAgent):
                         "call_next_agent": False,
                         "agent_name": "",
                         "next_agent_instruction": "",
-                        "next_agent_schema": {}
+                        "artifacts": {}
                     }
                 elif response.status == "failed":
                     return {
@@ -299,7 +299,7 @@ class A2AOpenaiAgent(BaseAgent):
                         "call_next_agent": False,
                         "agent_name": "",
                         "next_agent_instruction": "",
-                        "next_agent_schema": {}
+                        "artifacts": {}
                     }
                 elif response.status == "completed":
                     return {
@@ -310,7 +310,7 @@ class A2AOpenaiAgent(BaseAgent):
                         "call_next_agent": False,
                         "agent_name": "",
                         "next_agent_instruction": "",
-                        "next_agent_schema": {}
+                        "artifacts": {}
                     }
             elif response.action == 'call_next_agent':
                 return {
@@ -321,7 +321,7 @@ class A2AOpenaiAgent(BaseAgent):
                     "call_next_agent": True,
                     "agent_name": response.agent_name,
                     "next_agent_instruction": response.next_agent_instruction,
-                    "next_agent_schema": response.next_agent_schema
+                    "artifacts": response.artifacts
                 }
 
         return {
@@ -332,7 +332,7 @@ class A2AOpenaiAgent(BaseAgent):
             "call_next_agent": False,
             "agent_name": "",
             "next_agent_instruction": "",
-            "next_agent_schema": {}
+            "artifacts": {}
         }
     
     def root_instruction(self, chat_history: str, tools: Any = None, agent_info: Any = None) -> str:

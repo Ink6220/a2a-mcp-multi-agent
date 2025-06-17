@@ -43,11 +43,11 @@ class A2AOpenaiAgentNative(BaseAgent):
             temperature=0
         )
         return instruction, client, assistant
-         
-    async def invoke(self, query, context_id: str, task_id: str) -> ResponseFormat:
+
+    async def invoke(self, query, context_id: str, task_id: str, history: str) -> ResponseFormat:
         try:
             usage_id = str(uuid4())
-            history = "" # TODO: Load Memory
+            # history = "" # TODO: Load Memory
             agent_info = self.card_discovery.get_remote_agent_info()
             instruction = self.root_instruction(chat_history=history, agent_info=agent_info)
             session = self.mcp_server[0]

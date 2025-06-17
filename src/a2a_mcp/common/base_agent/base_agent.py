@@ -57,7 +57,6 @@ class ResponseFormat(BaseModel):
         description="Message content, passed to the next agent as an instruction TODO"
     )
     
-    #TODO artifacts: Optional[Dict[str, Union[str, float, int, bool, None, List[Any], Dict[str, Any]]]] = Field(
     artifacts: Optional[str] = Field(
         default=None,
         description="Optional structured JSON data to be passed as artifacts; must be JSON-serializable."
@@ -113,7 +112,7 @@ class BaseAgent(ABC):
 
 
     @abstractmethod
-    async def invoke(self, query: str, context_id: str, task_id: str) -> Dict[str, Any]:
+    async def invoke(self, query: str, context_id: str, task_id: str, history: str) -> ResponseFormat:
         """Invoke the agent with a query and return a single response."""
         pass
 

@@ -1,4 +1,4 @@
-from a2a_mcp.common.base_agent.base_agent import BaseAgent, ResponseFormat
+from a2a_mcp.common.base_agent.base_agent import BaseAgent, ResponseFormat, Usage, ExtraUsage
 from a2a_mcp.common.prompts import A2A_OPENAI_NATIVE_BASE_PROMPT
 from agents import Agent, ModelSettings, Runner, ItemHelpers
 from openai.types.responses import ResponseTextDeltaEvent, ResponseFunctionToolCall, ResponseOutputMessage, ResponseOutputItemAddedEvent, ResponseFunctionCallArgumentsDeltaEvent
@@ -19,7 +19,7 @@ import traceback
 import time
 from colorama import Fore, Style, init
 from openai import OpenAI, AsyncOpenAI
-
+from uuid import uuid4
 
 class A2AOpenaiAgentNative(BaseAgent):
     def __init__(self, agent_card: CustomAgentCard, card_discovery: A2ACardDiscovery, mcp_server: list=[]):
@@ -32,23 +32,24 @@ class A2AOpenaiAgentNative(BaseAgent):
         print("=============== Using Openai ===============")
 
     def get_agent(self, history, agent_info):
-        inst = self.root_instruction(chat_history=history, agent_info=agent_info)
-        print(inst)
+        instruction = self.root_instruction(chat_history=history, agent_info=agent_info)
+        print(instruction)
 
         client = AsyncOpenAI()
         assistant = client.beta.assistants.create(
-            instructions=inst,
+            instructions=instruction,
             model=self.model_name,
             tools=[],
             temperature=0
         )
-        return client, assistant
+        return instruction, client, assistant
          
     async def invoke(self, query, context_id: str, task_id: str) -> ResponseFormat:
         try:
+            usage_id = str(uuid4())
             history = "" # TODO: Load Memory
             agent_info = self.card_discovery.get_remote_agent_info()
-            inst = self.root_instruction(chat_history=history, agent_info=agent_info)
+            instruction = self.root_instruction(chat_history=history, agent_info=agent_info)
             session = self.mcp_server[0]
             tools_result = await session.list_tools()
             tools_list = [{"name": tool.name, "description": tool.description,
@@ -57,20 +58,31 @@ class A2AOpenaiAgentNative(BaseAgent):
             client = AsyncOpenAI()
             
             tools = self.convert_tool_format(tools_result)
-            print(json.dumps(tools, indent=4, ensure_ascii=False))
+            api_usage = {
+                "prompt_tokens": 0,
+                "completion_tokens": 0,
+                "cached_tokens": 0,
+                "reasoning_tokens": 0
+            }
 
             input_messages = [{"role": "user", "content": query}]
             is_continue = True # True while agent calling tools, False after agent try to answer
             while is_continue:
                 print("\n\n")
                 response = await client.responses.create(
-                    instructions=inst,
+                    instructions=instruction,
                     model=self.model_name,
                     input=input_messages,
                     tools=tools,
                     tool_choice='auto',
                     temperature=0
                 )
+                print(json.dumps(response.model_dump(), indent=2, ensure_ascii=False))
+                api_usage["prompt_tokens"] += response.usage.input_tokens
+                api_usage["completion_tokens"] += response.usage.output_tokens
+                api_usage["cached_tokens"] += response.usage.input_tokens_details.cached_tokens
+                api_usage["reasoning_tokens"] += response.usage.output_tokens_details.reasoning_tokens
+
 
                 output_message = response.output
                 for tool_call in output_message:
@@ -96,6 +108,21 @@ class A2AOpenaiAgentNative(BaseAgent):
             print(output_message[0].content[0].text)
 
             # TODO: Shold we save conversation history here ? 
+
+            usage = Usage(
+                usage_id=usage_id,
+                context_id=context_id,
+                task_id=task_id,
+                model_name=self.model_name,
+                user_input=query,
+                output=response_object,
+                prompt_tokens=api_usage['prompt_tokens'],
+                completion_tokens=api_usage['completion_tokens'],
+                extra_usage=ExtraUsage(reasoning_tokens=api_usage['reasoning_tokens'], cache_tokens=api_usage['cached_tokens'])
+            )
+            self.record_usage(usage)
+            print(usage)
+
 
         except OpenAIError as e:
             traceback.print_exc()

@@ -50,7 +50,8 @@ class ResponseFormat(BaseModel):
         description="Message content, passed to the next agent as an instruction TODO"
     )
     
-    artifacts: Optional[Dict[str, Union[str, float, int, bool, None, List[Any], Dict[str, Any]]]] = Field(
+    #TODO artifacts: Optional[Dict[str, Union[str, float, int, bool, None, List[Any], Dict[str, Any]]]] = Field(
+    artifacts: Optional[str] = Field(
         default=None,
         description="Optional structured JSON data to be passed as artifacts; must be JSON-serializable."
     )

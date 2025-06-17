@@ -44,11 +44,11 @@ class A2AOpenaiAgent(BaseAgent):
             
         )
          
-    async def invoke(self, query: str, context_id: str, task_id: str) -> ResponseFormat:
+    async def invoke(self, query: str, context_id: str, task_id: str, history: str) -> ResponseFormat:
         # TODO: maybe we should go through together on invoke(), if we are going to change response format etc (im not too clear on this)
         result = None
         try:
-            history = "" # TODO: Load Memory
+            # history = "" # TODO: Load Memory
             agent_info = self.card_discovery.get_remote_agent_info()
             self.agent = self.get_agent(history, agent_info)
             print(Fore.GREEN + Style.BRIGHT + "Init agent complete" + Style.RESET_ALL)

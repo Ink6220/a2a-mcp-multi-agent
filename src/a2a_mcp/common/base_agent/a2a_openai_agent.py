@@ -71,7 +71,7 @@ class A2AOpenaiAgent(BaseAgent):
                     message="The response format was invalid.",
                     agent_name=None,
                     next_agent_instruction=None,
-                    next_agent_schema=None
+                    artifacts=None
                 )
 
         except OpenAIError as e:
@@ -84,7 +84,7 @@ class A2AOpenaiAgent(BaseAgent):
                 message="We are unable to process your request at the moment. Please try again.",
                 agent_name=None,
                 next_agent_instruction=None,
-                next_agent_schema=None
+                artifacts=None
             )
 
     async def stream(self, query: str, context_id: str, task_id: str) -> AsyncGenerator[Dict[str, Any], None]:
@@ -272,7 +272,7 @@ class A2AOpenaiAgent(BaseAgent):
                         "call_next_agent": False,
                         "agent_name": "",
                         "next_agent_instruction": "",
-                        "next_agent_schema": {}
+                        "artifacts": {}
                     }
                 elif response.status == "failed":
                     return {
@@ -283,7 +283,7 @@ class A2AOpenaiAgent(BaseAgent):
                         "call_next_agent": False,
                         "agent_name": "",
                         "next_agent_instruction": "",
-                        "next_agent_schema": {}
+                        "artifacts": {}
                     }
                 elif response.status == "completed":
                     return {
@@ -294,7 +294,7 @@ class A2AOpenaiAgent(BaseAgent):
                         "call_next_agent": False,
                         "agent_name": "",
                         "next_agent_instruction": "",
-                        "next_agent_schema": {}
+                        "artifacts": {}
                     }
             elif response.action == 'call_next_agent':
                 return {
@@ -305,7 +305,7 @@ class A2AOpenaiAgent(BaseAgent):
                     "call_next_agent": True,
                     "agent_name": response.agent_name,
                     "next_agent_instruction": response.next_agent_instruction,
-                    "next_agent_schema": response.next_agent_schema
+                    "artifacts": response.artifacts
                 }
 
         return {
@@ -316,7 +316,7 @@ class A2AOpenaiAgent(BaseAgent):
             "call_next_agent": False,
             "agent_name": "",
             "next_agent_instruction": "",
-            "next_agent_schema": {}
+            "artifacts": {}
         }
     
     def root_instruction(self, chat_history: str, tools: Any = None, agent_info: Any = None) -> str:

@@ -3,7 +3,8 @@ from typing import Any, Dict, Literal, Union, AsyncGenerator, Self
 from collections.abc import AsyncIterable
 from pydantic import BaseModel, Field, model_validator
 from typing import Literal, Optional, List, Dict, Any
-from a2a_mcp.common.types import CustomAgentCard
+from a2a.types import MessageSendParams, AgentCard
+from a2a_mcp.common.types import CustomAgentCard, AgentCard
 from a2a_mcp.common.card_discovery import A2ACardDiscovery
 import json
 import uuid
@@ -49,9 +50,9 @@ class ResponseFormat(BaseModel):
         description="Message content, passed to the next agent as an instruction TODO"
     )
     
-    next_agent_schema: Optional[str] = Field(
-        ...,
-        description="Schema-compatible dictionary containing input data for the next agent, if applicable."
+    artifacts: Optional[Dict[str, Union[str, float, int, bool, None, List[Any], Dict[str, Any]]]] = Field(
+        default=None,
+        description="Optional structured JSON data to be passed as artifacts; must be JSON-serializable."
     )
 
     @model_validator(mode="after")
@@ -114,4 +115,13 @@ class BaseAgent(ABC):
     @abstractmethod
     def root_instruction(self, chat_history: str, tools: Any = None, agent_info: Any = None) -> str:
         """Generate the root instruction for the agent."""
+        pass
+
+    @abstractmethod
+    async def make_remote_agent_connection(
+        self,
+        target_agent_card: AgentCard,
+        request: MessageSendParams
+    ) -> AsyncGenerator[dict, None]:
+        """Form a connection and stream messages to a remote agent by name, yielding events as they arrive."""
         pass

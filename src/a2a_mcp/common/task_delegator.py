@@ -6,7 +6,7 @@ from a2a.server.tasks import TaskUpdater
 from a2a.types import Message, MessageSendParams, Part, TextPart, Role
 from a2a_mcp.common.base_agent.base_agent import ResponseFormat, BaseAgent, MessageSendParams
 
-class task_delegator():
+class TaskDelegator():
     def __init__(self, updater: TaskUpdater, agent: BaseAgent, task_context_id: str) -> None:
         # updater handles updating parent state and task, adding artifacts etc
         self.task_updater = updater

@@ -15,13 +15,20 @@ from a2a.types import (
     TextPart,
     FilePart,
     UnsupportedOperationError,
+    InternalError,
+    MessageSendParams,
+    MessageSendConfiguration,
+    Message,
 )
+from uuid import uuid4
+import json
 from a2a.utils import new_agent_text_message, new_task
 from a2a.utils.errors import ServerError
 from a2a_mcp.common.base_agent.base_agent import BaseAgent, ResponseFormat
 from a2a_mcp.common.context_memory import ContextMemory
 logger = logging.getLogger(__name__)
-
+import httpx  
+from a2a_mcp.common.remote_agent_connection import RemoteAgentConnections
 
 class GenericAgentExecutor(AgentExecutor):
     """AgentExecutor used by the tragel agents."""
@@ -116,24 +123,27 @@ class GenericAgentExecutor(AgentExecutor):
         history = self.postprocess(context_store)
 
         # TODO: Implement agent.stream() later
-        async for item in self.agent.invoke(query, context_id, task_id, history):
-            # Agent to Agent call will return events,
-            # Update the relevant ids to proxy back.
-            if hasattr(item, 'root') and isinstance(
-                item.root, SendStreamingMessageSuccessResponse
+        item = await self.agent.invoke(query, task.contextId, task.id)
+
+        # Agent to Agent call will return events,
+        # Update the relevant ids to proxy back.
+        if hasattr(item, 'root') and isinstance(
+            item.root, SendStreamingMessageSuccessResponse
+        ):
+            event = item.root.result
+            if isinstance(
+                event,
+                (TaskStatusUpdateEvent | TaskArtifactUpdateEvent),
             ):
-                event = item.root.result
-                if isinstance(
-                    event,
-                    (TaskStatusUpdateEvent | TaskArtifactUpdateEvent),
-                ):
-                    event_queue.enqueue_event(event)
-                continue
-            
-            print("item", item)
-            if isinstance(item, ResponseFormat):
-                is_task_complete = item.status == "completed" #item['is_task_complete']
-                require_user_input = (item.status == "input_required" or item.status == "failed") #item['require_user_input']
+                event_queue.enqueue_event(event)
+        
+        print("item", item)
+        if isinstance(item, ResponseFormat):
+            print("\n\n")
+            print("got response format")
+            if item.action == "answer":
+                is_task_complete = item.status == "completed"
+                require_user_input = (item.status == "input_required" or item.status == "failed")
 
                 if is_task_complete:
                     # Always create a TextPart for the response content
@@ -144,7 +154,6 @@ class GenericAgentExecutor(AgentExecutor):
                         name=f'{self.agent.agent_name}-result',
                     )
                     updater.complete()
-                    break
                 elif require_user_input:
                     updater.update_status(
                         TaskState.input_required,
@@ -155,7 +164,6 @@ class GenericAgentExecutor(AgentExecutor):
                         ),
                         final=True,
                     )
-                    break
                 else:
                     updater.update_status(
                         TaskState.working,
@@ -163,7 +171,53 @@ class GenericAgentExecutor(AgentExecutor):
                             item.message,
                             task.contextId,
                             task.id,
-                        ),                    )
+                        ),
+                    )
+            elif item.action == "call_next_agent":
+                # TODO: Task delegator when action space is call_next_agent to item.agent_name
+
+                # https://github.com/dmesquita/multi-agent-communication-a2a-python/blob/main/server_event_detection_a2a.py
+                async with httpx.AsyncClient() as httpx_client:
+                    remote_agent_card =  self.agent.card_discovery.get_remote_agent_card_by_name(item.agent_name)
+                    remote_agent_connection = RemoteAgentConnections(httpx_client, remote_agent_card)
+
+                    message = Message(
+                        role="user",
+                        parts=[TextPart(text=item.next_agent_instruction), DataPart(data=json.loads(item.next_agent_schema))],
+                        messageId=str(uuid4()),
+                        taskId=str(uuid4()), # TODO: generate task_id
+                        contextId=task.contextId, # TODO: Get contextId
+                    )
+
+                    payload = MessageSendParams(
+                        id=str(uuid4()),
+                        message=message,
+                        configuration=MessageSendConfiguration(
+                            acceptedOutputModes=["text"],
+                        ),
+                    )
+
+                    async for event in remote_agent_connection.send_message_streaming(payload):
+                        if isinstance(event, Message):
+                            print("Final message:", event)
+                        elif isinstance(event, TaskStatusUpdateEvent):
+                            print("Status update:", event)
+                        elif isinstance(event, TaskArtifactUpdateEvent):
+                            print("Artifact update:", event)
+                        else:
+                            print("Other event:", event)
+
+                # Mockup Artifact back to client
+                # Always create a TextPart for the response content
+                part = TextPart(text=item.message)
+
+                updater.add_artifact(
+                    [part],
+                    name=f'{self.agent.agent_name}-result',
+                )
+                updater.complete()
+            else:
+                raise ServerError(error=InternalError(message="Invalid Action Space generated by Agent."))
 
     def _validate_request(self, context: RequestContext) -> bool:
         return False

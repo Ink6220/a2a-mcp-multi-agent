@@ -44,12 +44,12 @@ class A2AOpenaiAgent(BaseAgent):
             
         )
          
-    async def invoke(self, query: str, context_id: str, task_id: str, history: str) -> Dict[str, Any]:
+    async def invoke(self, query: str, context_id: str, task_id: str, history: str) -> ResponseFormat:
         # TODO: maybe we should go through together on invoke(), if we are going to change response format etc (im not too clear on this)
         result = None
         try:
             # history = "" # TODO: Load Memory
-            agent_info = self.card_discovery.get_remote_agent_info() # TODO: Add agent discovery information
+            agent_info = self.card_discovery.get_remote_agent_info()
             self.agent = self.get_agent(history, agent_info)
             print(Fore.GREEN + Style.BRIGHT + "Init agent complete" + Style.RESET_ALL)
             start_time = time.time()
@@ -61,10 +61,10 @@ class A2AOpenaiAgent(BaseAgent):
         
             # Convert result to ResponseFormat
             try:
-                yield result.final_output
+                return result.final_output
             except ValidationError as ve:
                 print("Validation error while formatting response:", ve)
-                yield ResponseFormat(
+                return ResponseFormat(
                     action="answer",
                     status="failed",
                     custom_status="",
@@ -77,7 +77,7 @@ class A2AOpenaiAgent(BaseAgent):
         except OpenAIError as e:
             traceback.print_exc()
             print(e)
-            yield ResponseFormat(
+            return ResponseFormat(
                 action="answer",
                 status="input_required",
                 custom_status="",
@@ -90,7 +90,7 @@ class A2AOpenaiAgent(BaseAgent):
     async def stream(self, query: str, context_id: str, task_id: str) -> AsyncGenerator[Dict[str, Any], None]:
 
         history = "" # TODO: Load Memory
-        agent_info = self.card_discovery.get_remote_agent_info() # TODO: Add agent discovery information
+        agent_info = self.card_discovery.get_remote_agent_info()
         self.agent = self.get_agent(history, agent_info)
 
         result = Runner.run_streamed(self.agent, input=query)

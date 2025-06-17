@@ -62,9 +62,9 @@ class GenericAgentExecutor(AgentExecutor):
             event_queue.enqueue_event(task)
             print(f"📋 Created new task: {task.id}")
         
-        # Create real A2A TaskUpdater for proper state management
+        # A2A TaskUpdater for local state management
         updater = TaskUpdater(event_queue, task.id, task.contextId)
-
+        # TaskDelegator for delegation to remote agents
         self.delegator = TaskDelegator(updater, self.agent, task.contextId) # instantiate the delegator
 
 
@@ -81,6 +81,8 @@ class GenericAgentExecutor(AgentExecutor):
             response_obj = await self.agent.invoke(query, session_id)
             print(f"🤖 Agent Response: action={response_obj.action}, status={response_obj.status}")
             print(f"   Message: {response_obj.message}")
+
+            # Delegation logic
             if response_obj.action == "call_next_agent":
                 print(f"🔄 Delegating to agent: {response_obj.agent_name} (input_required)")
                 delegation_message = new_agent_text_message(

@@ -1,4 +1,4 @@
-from a2a_mcp.common.base_agent.base_agent import BaseAgent, ResponseFormat
+from a2a_mcp.common.base_agent.base_agent import BaseAgent, ResponseFormat, Usage, ExtraUsage
 from a2a_mcp.common.prompts import A2A_OPENAI_BASE_PROMPT
 from agents import Agent, ModelSettings, Runner, ItemHelpers
 from openai.types.responses import ResponseTextDeltaEvent
@@ -20,6 +20,7 @@ import traceback
 import time
 from colorama import Fore, Style, init
 from pydantic import ValidationError
+from uuid import uuid4
 
 class A2AOpenaiAgent(BaseAgent):
     def __init__(self, agent_card: CustomAgentCard, card_discovery: A2ACardDiscovery, mcp_server: list=[]):
@@ -32,11 +33,11 @@ class A2AOpenaiAgent(BaseAgent):
         print("=============== Using Openai ===============")
 
     def get_agent(self, history, agent_info):
-        inst = self.root_instruction(chat_history=history, agent_info=agent_info)
-        print(inst)
-        return Agent(
+        instruction = self.root_instruction(chat_history=history, agent_info=agent_info)
+        print(instruction)
+        return instruction, Agent(
             name=self.agent_card.name,
-            instructions=inst,
+            instructions=instruction,
             model=self.model_name,
             mcp_servers=self.mcp_server,
             output_type=ResponseFormat,
@@ -46,19 +47,34 @@ class A2AOpenaiAgent(BaseAgent):
          
     async def invoke(self, query: str, context_id: str, task_id: str, history: str) -> ResponseFormat:
         # TODO: maybe we should go through together on invoke(), if we are going to change response format etc (im not too clear on this)
+        usage_id = str(uuid4())
         result = None
         try:
             # history = "" # TODO: Load Memory
             agent_info = self.card_discovery.get_remote_agent_info()
-            self.agent = self.get_agent(history, agent_info)
+            instruction, self.agent = self.get_agent(history, agent_info)
             print(Fore.GREEN + Style.BRIGHT + "Init agent complete" + Style.RESET_ALL)
             start_time = time.time()
             result = await Runner.run(self.agent, query)
             print(Fore.GREEN + Style.BRIGHT + "[Runner.run]:" + Style.RESET_ALL, time.time() - start_time)
+            print(result.raw_responses[0].usage)
             print(result.final_output)
-
+            api_usage = result.raw_responses[0].usage
             # TODO: Shold we save conversation history here ? 
         
+            usage = Usage(
+                usage_id=usage_id,
+                context_id=context_id,
+                task_id=task_id,
+                model_name=self.model_name,
+                user_input=query,
+                output=result.final_output,
+                prompt_tokens=api_usage.input_tokens,
+                completion_tokens=api_usage.output_tokens,
+                extra_usage=ExtraUsage(reasoning_tokens=api_usage.input_tokens_details.cached_tokens, cache_tokens=api_usage.output_tokens_details.reasoning_tokens)
+            )
+            self.record_usage(usage)
+            print(usage)
             # Convert result to ResponseFormat
             try:
                 return result.final_output

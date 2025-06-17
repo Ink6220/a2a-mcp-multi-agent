@@ -118,11 +118,11 @@ class BaseAgent(ABC):
         """Generate the root instruction for the agent."""
         pass
 
-    # @abstractmethod
-    # async def make_remote_agent_connection(
-    #     self,
-    #     target_agent_card: AgentCard,
-    #     request: MessageSendParams
-    # ) -> AsyncGenerator[dict, None]:
-    #     """Form a connection and stream messages to a remote agent by name, yielding events as they arrive."""
-    #     pass
+    @abstractmethod
+    async def make_remote_agent_connection(
+        self,
+        target_agent_card: AgentCard,
+        request: MessageSendParams
+    ) -> AsyncGenerator[dict, None]:
+        """Form a connection and stream messages to a remote agent by name, yielding events as they arrive."""
+        pass

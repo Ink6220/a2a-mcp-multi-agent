@@ -123,7 +123,7 @@ class GenericAgentExecutor(AgentExecutor):
         history = self.postprocess(context_store)
 
         # TODO: Implement agent.stream() later
-        item = await self.agent.invoke(query, task.contextId, task.id)
+        item = await self.agent.invoke(query, task.contextId, task.id, history)
 
         # Agent to Agent call will return events,
         # Update the relevant ids to proxy back.
@@ -183,7 +183,8 @@ class GenericAgentExecutor(AgentExecutor):
 
                     message = Message(
                         role="user",
-                        parts=[TextPart(text=item.next_agent_instruction), DataPart(data=json.loads(item.next_agent_schema))],
+                        #TODO: parts=[TextPart(text=item.next_agent_instruction), DataPart(data=json.loads(item.next_agent_schema))],
+                        parts=[TextPart(text=item.next_agent_instruction)],
                         messageId=str(uuid4()),
                         taskId=str(uuid4()), # TODO: generate task_id
                         contextId=task.contextId, # TODO: Get contextId

@@ -29,7 +29,7 @@ class GenericAgentExecutor(AgentExecutor):
     def __init__(self, agent: BaseAgent, task_store: InMemoryTaskStore):  
         self.agent = agent
         self.task_store = task_store
-        self.context_store = ContextMemory()
+        self.context_stores = {}
 
     def postprocess(self, context_store: ContextMemory) -> str:
         """Process history from all tasks in the context memory
@@ -94,20 +94,26 @@ class GenericAgentExecutor(AgentExecutor):
         context_id = context.context_id
 
         updater = TaskUpdater(event_queue, task.id, context_id)
-        existing_task = self.context_store.get_task(task_id)
+        
+        # Get or create context store for this context
+        if context_id not in self.context_stores:
+            self.context_stores[context_id] = ContextMemory()
+        context_store = self.context_stores[context_id]
+        
+        existing_task = context_store.get_task(task_id)
 
         if existing_task:
             # Update existing task
-            self.context_store.update_task(task_id, task)
+            context_store.update_task(task_id, task)
             logger.info(f'Updated existing task {task_id} in context memory')
         else:
             # Add new task
-            self.context_store.add_task(task)
+            context_store.add_task(task)
             logger.info(f'Added new task {task_id} to context memory')
 
         task_history = await self.task_store.get(task_id)
         if(task_history): logger.info(f'History: {task_history.model_dump_json(indent=2, exclude_none=True)}')
-        history = self.postprocess(self.context_store)
+        history = self.postprocess(context_store)
 
         # TODO: Implement agent.stream() later
         async for item in self.agent.invoke(query, context_id, task_id, history):
@@ -158,69 +164,6 @@ class GenericAgentExecutor(AgentExecutor):
                             task.contextId,
                             task.id,
                         ),                    )
-
-    def _transform_task_history(self, task_history) -> dict:
-        """Transform task history to simplified conversation format grouped by contextId"""
-        import json
-        
-        result = {}
-        
-        if hasattr(task_history, 'history') and task_history.history:
-            context_id = getattr(task_history, 'contextId', 'unknown')
-            
-            conversations = []
-            for message in task_history.history:
-                conversation_entry = {
-                    "role": message.role.value if hasattr(message.role, 'value') else str(message.role),
-                    "parts": [],
-                    "metadata": getattr(message, 'metadata', None)
-                }
-                
-                # Transform parts
-                if hasattr(message, 'parts') and message.parts:
-                    for part in message.parts:
-                        if hasattr(part, 'root'):
-                            part_data = part.root
-                        else:
-                            part_data = part
-                            
-                        if hasattr(part_data, 'kind'):
-                            part_type = part_data.kind
-                        elif hasattr(part_data, 'type'):
-                            part_type = part_data.type
-                        else:
-                            part_type = "text"  # default
-                            
-                        part_entry = {
-                            "type": part_type,
-                            "metadata": getattr(part_data, 'metadata', None)
-                        }
-                        
-                        # Add content based on part type
-                        if part_type == "text":
-                            part_entry["text"] = getattr(part_data, 'text', '')
-                        elif part_type == "toolUse":
-                            part_entry["toolUseId"] = getattr(part_data, 'toolUseId', '')
-                            part_entry["toolName"] = getattr(part_data, 'toolName', '')
-                            part_entry["input"] = getattr(part_data, 'input', {})
-                        elif part_type == "tool":
-                            part_entry["toolUseId"] = getattr(part_data, 'toolUseId', '')
-                            part_entry["content"] = getattr(part_data, 'content', [])
-                            part_entry["status"] = getattr(part_data, 'status', '')
-                        else:
-                            # For other types, try to get common attributes
-                            for attr in ['text', 'content', 'data']:
-                                if hasattr(part_data, attr):
-                                    part_entry[attr] = getattr(part_data, attr)
-                                    break
-                        
-                        conversation_entry["parts"].append(part_entry)
-                
-                conversations.append(conversation_entry)
-            
-            result[context_id] = conversations
-        
-        return json.dumps(result, ensure_ascii=False, indent=2)
 
     def _validate_request(self, context: RequestContext) -> bool:
         return False

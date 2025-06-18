@@ -36,10 +36,10 @@ class LLMBehaviorTester:
         },
         {
             "name": "Delegation State",
-            "query": "Write me a Python script",
+            "query": "I need a JSON return, this can be done by the test-agent-2",
             "expected_state": {
                 "action": "call_next_agent",
-                "status": "completed",
+                "status": "input_required",
                 "required_fields": ["message", "agent_name", "next_agent_instruction"],
                 "field_requirements": {
                     "agent_name": lambda x: bool(x and len(x) > 0),
@@ -49,7 +49,7 @@ class LLMBehaviorTester:
         },
         {
             "name": "Input Required State",
-            "query": "What's your favorite color?",
+            "query": "Hi this is a vague prompt, please ask for more information",
             "expected_state": {
                 "action": "answer",
                 "status": "input_required",
@@ -59,7 +59,7 @@ class LLMBehaviorTester:
         },
         {
             "name": "Failed State",
-            "query": "This should fail",
+            "query": "This should fail, return an error",
             "expected_state": {
                 "action": "answer",
                 "status": "failed",
@@ -69,7 +69,7 @@ class LLMBehaviorTester:
         },
         {
             "name": "Artifact State",
-            "query": "Generate an output in JSON",
+            "query": "Generate a mock output in JSON, it should be returned as an artifact",
             "expected_state": {
                 "action": "answer",
                 "status": "completed",

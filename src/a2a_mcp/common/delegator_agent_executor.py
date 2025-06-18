@@ -1,56 +1,97 @@
-## This is a very simple executor that just calls invoke() and handles the response based on the A2A protocol
+import logging
 
+from a2a.server.agent_execution import AgentExecutor, RequestContext
+from a2a.server.events import EventQueue
+from a2a.server.tasks import InMemoryTaskStore, TaskUpdater
 import logging
 import asyncio
 import json
-
-from a2a.server.events import EventQueue
-from a2a.server.tasks import TaskUpdater
-from a2a.types import TaskState, TextPart, Task, Message, Part, Role, AgentCard
-from a2a.utils import new_agent_text_message, new_task
-from a2a.server.agent_execution import AgentExecutor, RequestContext
+from a2a.types import (
+    DataPart,
+    InvalidParamsError,
+    SendStreamingMessageSuccessResponse,
+    Task,
+    TaskArtifactUpdateEvent,
+    TaskState,
+    TaskStatusUpdateEvent,
+    TextPart,
+    FilePart,
+    Part,
+    UnsupportedOperationError,
+    InternalError,
+    MessageSendParams,
+    MessageSendConfiguration,
+    Message,
+)
 from uuid import uuid4
-from a2a_mcp.common.task_delegator import TaskDelegator
 from typing import AsyncGenerator, List, Dict, Any
-from a2a_mcp.common.base_agent.base_agent import ResponseFormat
-
+from a2a.utils import new_agent_text_message, new_task
+from a2a.utils.errors import ServerError
+from a2a_mcp.common.task_delegator import TaskDelegator
+from a2a_mcp.common.base_agent.base_agent import BaseAgent, ResponseFormat
+from a2a_mcp.common.context_memory import ContextMemory
 logger = logging.getLogger(__name__)
+import httpx  
 
-def create_artifact_parts(artifacts: str | None) -> List[Part]:
-    """
-    Create Parts from artifacts string for add_artifact method.
-    
-    Args:
-        artifacts: JSON string, plain text, or None
-        
-    Returns:
-        List of Part objects suitable for add_artifact()
-    """
-    if not artifacts:
-        return []
-    
-    # Try to parse as JSON first to format it nicely
-    try:
-        artifact_dict = json.loads(artifacts)
-        # If it's valid JSON, format it nicely
-        formatted_json = json.dumps(artifact_dict, indent=2, ensure_ascii=False)
-        return [Part(root=TextPart(text=formatted_json))]
-    except (json.JSONDecodeError, TypeError):
-        # If it's not valid JSON, treat as plain text
-        return [Part(root=TextPart(text=str(artifacts)))]
+def artifact_dict_to_parts(artifact_dict: Dict[str, Any]) -> List[Part]:
+    return [Part(root=TextPart(text=json.dumps(artifact_dict, indent=2)))]
 
-class GenericAgentExecutor(AgentExecutor):
-    """
-    A2A Protocol Compliant Executor for ResponseFormat objects
-    Inherits from AgentExecutor for full A2A SDK compatibility.
-    """
-    def __init__(self, agent):
-        super().__init__()
+class GenericDelegatorAgentExecutor(AgentExecutor):
+    """AgentExecutor used by the tragel agents."""
+
+    def __init__(self, agent: BaseAgent, task_store: InMemoryTaskStore):  
         self.agent = agent
+        self.task_store = task_store
+        self.context_stores: Dict[ContextMemory] = {}
         self.delegator: TaskDelegator
         self.ongoing_tasks: list[AsyncGenerator[dict, None]] = []
 
-    async def execute(self, context: RequestContext, event_queue):
+    def postprocess(self, context_store: ContextMemory) -> str:
+        """Process history from all tasks in the context memory
+        
+        Args:
+            context_store: ContextMemory containing multiple tasks
+            
+        Returns:
+            str: Formatted history from all tasks
+        """
+        lines = []
+        
+        # Process all tasks in the context memory
+        for task in context_store.tasks:
+            if task.history:
+                lines.append(f"=== Task {task.id} ===")
+                for message in task.history:
+                    if hasattr(message, 'kind') and message.kind == 'message':
+                        if message.parts:
+                            parts = []
+                            for part in message.parts:
+                                if hasattr(part, 'root'):
+                                    root_part = part.root
+                                    if hasattr(root_part, 'text'):
+                                        parts.append(root_part.text)
+                                    elif hasattr(root_part, 'data'):
+                                        parts.append(f"[Data: {json.dumps(root_part.data)}]")
+                                    elif hasattr(root_part, 'file') and hasattr(root_part.file, 'name'):
+                                        parts.append(f"[File: {root_part.file.name}]")
+                                    else:
+                                        parts.append(str(root_part))
+                                else:
+                                    if hasattr(part, 'text'):
+                                        parts.append(part.text)
+                                    else:
+                                        parts.append(str(part))
+            
+                            if parts:
+                                lines.append(f"{message.role}: {' '.join(parts)}")
+                lines.append("")
+        return "\n".join(lines)
+
+    async def execute(
+        self,
+        context: RequestContext,
+        event_queue: EventQueue,
+    ) -> None:
         """
         Main execution logic - fully A2A compliant using real A2A SDK
         
@@ -61,39 +102,60 @@ class GenericAgentExecutor(AgentExecutor):
         4. Creates proper artifacts on completion
         5. Handles delegation and error scenarios
         """
+        logger.info(f'Executing agent {self.agent.agent_name}')
+        error = self._validate_request(context)
+        if error:
+            raise ServerError(error=InvalidParamsError())
+
         print(f"🚀 Executing A2A-compliant agent: {self.agent.agent_name}")
         query = context.get_user_input()
         print(f"📝 User Query: {query}")
-        
-        # Create/get task using real A2A utilities
+
         task = context.current_task
-        # if no task, create a new one
+
         if not task:
             task = new_task(context.message)
             event_queue.enqueue_event(task)
-            print(f"📋 Created new task: {task.id}")
-        
+
+        task_id = context.task_id
+        context_id = context.context_id
+
         # A2A TaskUpdater for local state management
-        updater = TaskUpdater(event_queue, task.id, task.contextId)
+        updater = TaskUpdater(event_queue, task.id, context_id)
+        
         # TaskDelegator for delegation to remote agents
         self.delegator = TaskDelegator(updater, self.agent, task.contextId) # instantiate the delegator
-
-
         working_message = new_agent_text_message(
             "Processing your request...",
             task.contextId,
             task.id,
         )
+        updater.update_status(TaskState.working, working_message) # sends message via SSE to client
 
-        # sends message via SSE to client
-        updater.update_status(TaskState.working, working_message)
+        # Get or create context store for this context
+        if context_id not in self.context_stores:
+            self.context_stores[context_id] = ContextMemory()
+        context_store = self.context_stores[context_id]
+        
+        existing_task = context_store.get_task(task_id)
+
+        if existing_task:
+            # Update existing task
+            context_store.update_task(task_id, task)
+            logger.info(f'Updated existing task {task_id} in context memory')
+        else:
+            # Add new task
+            context_store.add_task(task)
+            logger.info(f'Added new task {task_id} to context memory')
+
         try:
-            session_id = task.contextId
-            history = "" # TODO: Load Memory
-            # Fixed: Now calling invoke with all required parameters including history
-            response_obj = await self.agent.invoke(query, session_id, task.id, history)
-            
-            # Response is now a ResponseFormat object directly, no need to convert
+            task_history = await self.task_store.get(task_id)
+            if(task_history): logger.info(f'History: {task_history.model_dump_json(indent=2, exclude_none=True)}')
+            history = self.postprocess(context_store)
+
+            # TODO: Implement agent.stream() later
+            response_obj = await self.agent.invoke(query, task.contextId, task.id, history)
+    
             print(f"🤖 Agent Response: action={response_obj.action}, status={response_obj.status}")
             print(f"   Message: {response_obj.message}")
 
@@ -123,14 +185,13 @@ class GenericAgentExecutor(AgentExecutor):
 
             elif response_obj.status == "completed":
                 # Normal task completion - use real A2A types
-                # Always use create_artifact_parts for consistency
                 if response_obj.artifacts:
-                    parts = create_artifact_parts(response_obj.artifacts)
+                    # add artifact id checking / logging can be done here
+                    parts = artifact_dict_to_parts(response_obj.artifacts)
                     updater.add_artifact(parts, name=f'{self.agent.agent_name}-result')
                 else:
-                    # Create artifact from message when no explicit artifacts
-                    parts = create_artifact_parts(response_obj.message)
-                    updater.add_artifact(parts, name=f'{self.agent.agent_name}-result')
+                    part = Part(root=TextPart(text=response_obj.message))
+                    updater.add_artifact([part], name=f'{self.agent.agent_name}-result')
                 updater.complete()
 
             elif response_obj.status == "input_required" and response_obj.action == "answer":
@@ -173,10 +234,15 @@ class GenericAgentExecutor(AgentExecutor):
             )
             updater.update_status(TaskState.failed, error_message, final=True)
 
-    async def cancel(self, context: RequestContext, event_queue):
-        # No-op for test executor
-        pass
+    def _validate_request(self, context: RequestContext) -> bool:
+        return False
 
+
+    async def cancel(
+        self, request: RequestContext, event_queue: EventQueue
+    ) -> Task | None:
+        raise ServerError(error=UnsupportedOperationError())
+    
     async def manage_streams(self, ongoing_streams, task_updater, agent_name="remote_agent"):
         """
         Consumes all ongoing async generator streams, updates the task, and returns True if all streams are complete.

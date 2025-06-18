@@ -3,8 +3,9 @@
 from typing import AsyncGenerator
 from uuid import uuid4
 from a2a.server.tasks import TaskUpdater
-from a2a.types import Message, MessageSendParams, Part, TextPart, Role
+from a2a.types import Message, MessageSendParams, Part, TextPart, Role, DataPart
 from a2a_mcp.common.base_agent.base_agent import ResponseFormat, BaseAgent, MessageSendParams
+import json 
 
 class TaskDelegator():
     def __init__(self, updater: TaskUpdater, agent: BaseAgent, task_context_id: str) -> None:
@@ -21,7 +22,7 @@ class TaskDelegator():
         # Extract required fields
         agent_name = response_obj.agent_name
         instruction = response_obj.next_agent_instruction
-        artifacts = response_obj.artifacts # TODO: add schema / custom data here (not included atm)
+        artifacts = json.loads(response_obj.artifacts) if response_obj.artifacts else {} # TODO: add schema / custom data here (not included atm)
         assert instruction and agent_name is not None
 
         # Use the correct method to get the agent card
@@ -38,7 +39,7 @@ class TaskDelegator():
                 messageId=str(uuid4()),
                 taskId=task_id,
                 contextId=self.task_context_id,
-                parts=[Part(root=TextPart(text=instruction))],
+                parts=[Part(root=TextPart(text=instruction)), Part(root=DataPart(data=artifacts))],
                 role=Role.agent,
             ),
         )

@@ -35,8 +35,8 @@ class ResponseFormat(BaseModel):
         description="System-defined flow status. Indicates if the task is complete, requires input, or has failed."
     )
     
-    custom_status: str = Field(
-        ...,
+    custom_status: Optional[str] = Field(
+        None,
         description="Optional custom state such as 'hang_up', 'timeout', etc. for extended flow semantics."
     )
     
@@ -44,7 +44,7 @@ class ResponseFormat(BaseModel):
 
     message: str = Field(
         ...,
-        description="Message content, passed to the user for answering or asking."
+        description="Message content, passed to caller of the agent (can be user or another agent)."
     )
 
     agent_name: Optional[str] = Field(

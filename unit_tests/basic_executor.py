@@ -65,7 +65,8 @@ class GenericAgentExecutor(AgentExecutor):
         updater.update_status(TaskState.working, working_message)
         try:
             session_id = task.contextId
-            response_obj = await self.agent.invoke(query, session_id)
+            history = "" # TODO: Load Memory
+            response_obj = await self.agent.invoke(query, session_id, task.id, history)
             print(f"🤖 Agent Response: action={response_obj.action}, status={response_obj.status}")
             print(f"   Message: {response_obj.message}")
             if response_obj.action == "call_next_agent":

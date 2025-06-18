@@ -16,8 +16,28 @@ from a2a_mcp.common.base_agent.base_agent import ResponseFormat
 
 logger = logging.getLogger(__name__)
 
-def artifact_dict_to_parts(artifact_dict: Dict[str, Any]) -> List[Part]:
-    return [Part(root=TextPart(text=json.dumps(artifact_dict, indent=2)))]
+def create_artifact_parts(artifacts: str | None) -> List[Part]:
+    """
+    Create Parts from artifacts string for add_artifact method.
+    
+    Args:
+        artifacts: JSON string, plain text, or None
+        
+    Returns:
+        List of Part objects suitable for add_artifact()
+    """
+    if not artifacts:
+        return []
+    
+    # Try to parse as JSON first to format it nicely
+    try:
+        artifact_dict = json.loads(artifacts)
+        # If it's valid JSON, format it nicely
+        formatted_json = json.dumps(artifact_dict, indent=2, ensure_ascii=False)
+        return [Part(root=TextPart(text=formatted_json))]
+    except (json.JSONDecodeError, TypeError):
+        # If it's not valid JSON, treat as plain text
+        return [Part(root=TextPart(text=str(artifacts)))]
 
 class GenericAgentExecutor(AgentExecutor):
     """
@@ -79,11 +99,10 @@ class GenericAgentExecutor(AgentExecutor):
         try:
             session_id = task.contextId
             history = "" # TODO: Load Memory
-            response_dict = await self.agent.invoke(query, session_id, task.id, history)
+            # Fixed: Now calling invoke with all required parameters including history
+            response_obj = await self.agent.invoke(query, session_id, task.id, history)
             
-            # Convert dict back to ResponseFormat for easier handling
-            response_obj = ResponseFormat(**response_dict)
-            
+            # Response is now a ResponseFormat object directly, no need to convert
             print(f"🤖 Agent Response: action={response_obj.action}, status={response_obj.status}")
             print(f"   Message: {response_obj.message}")
 
@@ -113,13 +132,14 @@ class GenericAgentExecutor(AgentExecutor):
 
             elif response_obj.status == "completed":
                 # Normal task completion - use real A2A types
+                # Always use create_artifact_parts for consistency
                 if response_obj.artifacts:
-                    # add artifact id checking / logging can be done here
-                    parts = artifact_dict_to_parts(response_obj.artifacts)
+                    parts = create_artifact_parts(response_obj.artifacts)
                     updater.add_artifact(parts, name=f'{self.agent.agent_name}-result')
                 else:
-                    part = Part(root=TextPart(text=response_obj.message))
-                    updater.add_artifact([part], name=f'{self.agent.agent_name}-result')
+                    # Create artifact from message when no explicit artifacts
+                    parts = create_artifact_parts(response_obj.message)
+                    updater.add_artifact(parts, name=f'{self.agent.agent_name}-result')
                 updater.complete()
 
             elif response_obj.status == "input_required" and response_obj.action == "answer":

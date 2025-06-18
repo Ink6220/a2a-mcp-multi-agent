@@ -18,7 +18,7 @@ import os
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
 
 from src.a2a_mcp.common.base_agent.base_agent import ResponseFormat
-from pydantic import ValidationError
+from pydantic import BaseModel, ValidationError
 
 class A2AComplianceError(Exception):
     """Raised when an agent's invoke() response is not A2A compliant"""
@@ -70,18 +70,35 @@ class A2AComplianceTester:
     }
     
     @staticmethod
-    def validate_response_state(response: ResponseFormat) -> Dict[str, Any]:
+    def validate_response_state(response: Any) -> Dict[str, Any]:
         """
         Validate response state and field relationships
         
         Args:
-            response: The ResponseFormat object to validate
+            response: The response object to validate
             
         Returns:
             Dict with validation results and any issues found
         """
         issues = []
         
+        # Check required A2A fields exist
+        required_fields = ["action", "status", "message"]
+        for field in required_fields:
+            if not hasattr(response, field):
+                issues.append(f"Missing required A2A field: {field}")
+                continue
+            
+            value = getattr(response, field)
+            if value is None:
+                issues.append(f"Required field {field} cannot be None")
+                
+        if issues:
+            return {
+                "valid": False,
+                "issues": issues
+            }
+            
         # Get expected state requirements
         if response.action not in A2AComplianceTester.STATE_REQUIREMENTS:
             return {
@@ -130,11 +147,11 @@ class A2AComplianceTester:
                 history=""
             )
             
-            # Verify response is ResponseFormat instance
-            if not isinstance(response, ResponseFormat):
+            # Verify response is a Pydantic BaseModel
+            if not isinstance(response, BaseModel):
                 return {
                     'status': 'FAILED',
-                    'error': f'Response must be ResponseFormat instance, got {type(response)}'
+                    'error': f'Response must be a Pydantic BaseModel instance, got {type(response)}'
                 }
             
             # Validate state and fields

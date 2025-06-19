@@ -48,8 +48,8 @@ class ResponseFormat(BaseModel):
     )
 
     next_agent_instruction: Optional[str] = Field(
-        default=None,
-        description="Message content, passed to the next agent as an instruction TODO"
+        None,
+        description="Message content, passed to the next agent as Clear description of the task to be executed"
     )
     
     artifacts: Optional[str] = Field(

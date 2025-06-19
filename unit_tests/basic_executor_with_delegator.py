@@ -69,16 +69,7 @@ class GenericAgentExecutor(AgentExecutor):
         task = context.current_task
         # if no task, create a new one
         if not task:
-            # Do not assign to context.message directly if it's a property
-            # Instead, skip or use a method if available (for test, we just create a new message)
-            message = Message(
-                role=Role.user,
-                parts=[Part(root=TextPart(text=query))],
-                messageId=str(uuid4()),
-                contextId=f"context-{str(uuid4())[:8]}",
-                taskId=None
-            )
-            task = new_task(message)
+            task = new_task(context.message)
             event_queue.enqueue_event(task)
             print(f"📋 Created new task: {task.id}")
         

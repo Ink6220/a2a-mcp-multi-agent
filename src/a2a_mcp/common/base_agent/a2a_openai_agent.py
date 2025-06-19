@@ -32,7 +32,6 @@ from colorama import Fore, Style, init
 from pydantic import ValidationError
 import httpx
 from uuid import uuid4
-from uuid import uuid4
 
 class A2AOpenaiAgent(BaseAgent):
     def __init__(self, agent_card: CustomAgentCard, card_discovery: A2ACardDiscovery, mcp_server: list=[]):

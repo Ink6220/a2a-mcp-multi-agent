@@ -113,9 +113,8 @@ class GenericAgentExecutor(AgentExecutor):
                     self.ongoing_tasks.append(stream)
 
                 # manage the streams using methods from the delegator
-                delegation_complete = await self.manage_streams(
+                delegation_complete = await self.delegator.manage_streams(
                     self.ongoing_tasks, 
-                    updater, 
                     response_obj.agent_name or "unknown_agent"
                 )
                 
@@ -177,58 +176,4 @@ class GenericAgentExecutor(AgentExecutor):
         # No-op for test executor
         pass
 
-    async def manage_streams(self, ongoing_streams, task_updater, agent_name="remote_agent"):
-        """
-        Consumes all ongoing async generator streams, updates the task, and returns True if all streams are complete.
-        """
-        logger = logging.getLogger(__name__)
-        streams_done = [False] * len(ongoing_streams)
-        tasks = []
 
-        async def consume_stream(idx, stream):
-            try:
-                async for event in stream:
-                    logger.info(f"[{agent_name}] Stream {idx} event: {event}")
-                    # Handle event types
-                    if event.get("type") == "Message":
-                        # Create proper message for task update
-                        message = new_agent_text_message(
-                            event.get("content", str(event)),
-                            task_updater.context_id,
-                            task_updater.task_id,
-                        )
-                        task_updater.update_status(TaskState.working, message)
-                    elif event.get("type") == "TaskArtifactUpdateEvent":
-                        # Add artifact to task
-                        artifact = event.get("artifact")
-                        if artifact:
-                            task_updater.add_artifact(artifact)
-                    elif event.get("type") == "error":
-                        # Handle error events
-                        error_message = new_agent_text_message(
-                            f"Remote agent error: {event.get('error', 'Unknown error')}",
-                            task_updater.context_id,
-                            task_updater.task_id,
-                        )
-                        task_updater.update_status(TaskState.failed, error_message)
-                    # Add more event types as needed
-            except Exception as e:
-                logger.error(f"[{agent_name}] Stream {idx} error: {e}")
-                error_message = new_agent_text_message(
-                    f"Stream processing error: {str(e)}",
-                    task_updater.context_id,
-                    task_updater.task_id,
-                )
-                task_updater.update_status(TaskState.failed, error_message)
-            finally:
-                streams_done[idx] = True
-
-        # Launch all stream consumers
-        for idx, stream in enumerate(ongoing_streams):
-            tasks.append(asyncio.create_task(consume_stream(idx, stream)))
-
-        # Wait for all streams to finish
-        await asyncio.gather(*tasks)
-
-        # All streams are done if all True
-        return all(streams_done)

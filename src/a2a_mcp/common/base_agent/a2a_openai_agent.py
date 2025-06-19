@@ -15,11 +15,22 @@ import logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 from a2a_mcp.common.types import CustomAgentCard
+from a2a.types import (
+    AgentCard, 
+    MessageSendParams, 
+    SendMessageRequest, 
+    SendStreamingMessageRequest, 
+    JSONRPCErrorResponse,
+    Task,
+    Message
+)
+from a2a.client import A2AClient
 from a2a_mcp.common.card_discovery import A2ACardDiscovery
 import traceback
 import time
 from colorama import Fore, Style, init
 from pydantic import ValidationError
+import httpx
 from uuid import uuid4
 from a2a_mcp.common.memory_management import MemoryManagement,ManageTask as Task
 class A2AOpenaiAgent(BaseAgent):
@@ -45,8 +56,62 @@ class A2AOpenaiAgent(BaseAgent):
             model_settings=ModelSettings(temperature=0.0),
             
         )
+    
+    async def make_remote_agent_connection(
+        self,
+        target_agent_card: AgentCard, 
+        request: MessageSendParams
+    ) -> AsyncGenerator[dict, None]:
+        """Form a connection and stream messages to a remote agent, yielding events as they arrive."""
+        
+        async def _stream_connection():
+            async with httpx.AsyncClient(timeout=30) as httpx_client:
+                agent_client = A2AClient(httpx_client, target_agent_card)
+                
+                # Check if agent supports streaming
+                supports_streaming = (
+                    hasattr(target_agent_card, "capabilities") and 
+                    target_agent_card.capabilities and 
+                    getattr(target_agent_card.capabilities, "streaming", False)
+                )
+                
+                if supports_streaming:
+                    # Stream from streaming agent
+                    async for response in agent_client.send_message_streaming(
+                        SendStreamingMessageRequest(id=str(uuid4()), params=request)
+                    ):
+                        if isinstance(response.root, JSONRPCErrorResponse):
+                            yield {"type": "error", "error": str(response.root)}
+                            return
+                        
+                        if hasattr(response.root, 'result') and response.root.result:
+                            event = response.root.result
+                            # Convert to dict for consistency
+                            if hasattr(event, '__dict__'):
+                                yield event.__dict__
+                            else:
+                                yield {"data": str(event)}
+                        else:
+                            yield {"type": "error", "error": "Empty response"}
+                            return
+                else:
+                    # Handle non-streaming agent
+                    response = await agent_client.send_message(
+                        SendMessageRequest(id=str(uuid4()), params=request)
+                    )
+                    
+                    if isinstance(response.root, JSONRPCErrorResponse):
+                        yield {"type": "error", "error": str(response.root)}
+                    else:
+                        result = response.root.result
+                        if hasattr(result, '__dict__'):
+                            yield result.__dict__
+                        else:
+                            yield {"data": str(result)}
+        
+        return _stream_connection()
 
-    async def invoke(self, query: str, context_id: str, task_id: str, context: Dict[str, Task]) -> ResponseFormat:
+    async def invoke(self, query: str, context_id: str, task_id: str, history: str) -> ResponseFormat:
         # TODO: maybe we should go through together on invoke(), if we are going to change response format etc (im not too clear on this)
         usage_id = str(uuid4())
         result = None

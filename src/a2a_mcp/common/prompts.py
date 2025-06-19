@@ -12,8 +12,8 @@ Agents:
   Description: Delegate the task to appropriate agent that are available in DISCOVERY.
   Parameters:
     - agent_name (str): Name of the agent responsible for the current response.
-    - next_agent_instruction (str): Message instruction to another agent.
-    - next_agent_schema (str): Schema-compatible dictionary containing input data for the next agent that exactly match to the example usage of the skill to be used.
+    - next_agent_instruction (str): Clear description of the task to be executed.
+    - artifacts (str): Optional structured JSON data to be passed as artifacts; must be JSON-serializable. As input data for the next agent (that exactly match to the example usage of the skill to be used) or additional structured response data.
 
 [2] answer
   Description: Answer the question with current knowledge or using tools (if available).

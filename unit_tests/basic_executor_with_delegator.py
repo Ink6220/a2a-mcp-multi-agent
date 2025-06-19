@@ -1,5 +1,4 @@
 ## This is a very simple executor that just calls invoke() and handles the response based on the A2A protocol
-## This is used to test the invoke() method of the agent
 
 import logging
 import asyncio
@@ -13,11 +12,32 @@ from a2a.server.agent_execution import AgentExecutor, RequestContext
 from uuid import uuid4
 from a2a_mcp.common.task_delegator import TaskDelegator
 from typing import AsyncGenerator, List, Dict, Any
+from a2a_mcp.common.base_agent.base_agent import ResponseFormat
 
 logger = logging.getLogger(__name__)
 
-def artifact_dict_to_parts(artifact_dict: Dict[str, Any]) -> List[Part]:
-    return [Part(root=TextPart(text=json.dumps(artifact_dict, indent=2)))]
+def create_artifact_parts(artifacts: str | None) -> List[Part]:
+    """
+    Create Parts from artifacts string for add_artifact method.
+    
+    Args:
+        artifacts: JSON string, plain text, or None
+        
+    Returns:
+        List of Part objects suitable for add_artifact()
+    """
+    if not artifacts:
+        return []
+    
+    # Try to parse as JSON first to format it nicely
+    try:
+        artifact_dict = json.loads(artifacts)
+        # If it's valid JSON, format it nicely
+        formatted_json = json.dumps(artifact_dict, indent=2, ensure_ascii=False)
+        return [Part(root=TextPart(text=formatted_json))]
+    except (json.JSONDecodeError, TypeError):
+        # If it's not valid JSON, treat as plain text
+        return [Part(root=TextPart(text=str(artifacts)))]
 
 class GenericAgentExecutor(AgentExecutor):
     """
@@ -49,22 +69,13 @@ class GenericAgentExecutor(AgentExecutor):
         task = context.current_task
         # if no task, create a new one
         if not task:
-            # Do not assign to context.message directly if it's a property
-            # Instead, skip or use a method if available (for test, we just create a new message)
-            message = Message(
-                role=Role.user,
-                parts=[Part(root=TextPart(text=query))],
-                messageId=str(uuid4()),
-                contextId=f"context-{str(uuid4())[:8]}",
-                taskId=None
-            )
-            task = new_task(message)
+            task = new_task(context.message)
             event_queue.enqueue_event(task)
             print(f"📋 Created new task: {task.id}")
         
-        # Create real A2A TaskUpdater for proper state management
+        # A2A TaskUpdater for local state management
         updater = TaskUpdater(event_queue, task.id, task.contextId)
-
+        # TaskDelegator for delegation to remote agents
         self.delegator = TaskDelegator(updater, self.agent, task.contextId) # instantiate the delegator
 
 
@@ -78,9 +89,15 @@ class GenericAgentExecutor(AgentExecutor):
         updater.update_status(TaskState.working, working_message)
         try:
             session_id = task.contextId
-            response_obj = await self.agent.invoke(query, session_id)
+            history = "" # TODO: Load Memory
+            # Fixed: Now calling invoke with all required parameters including history
+            response_obj = await self.agent.invoke(query, session_id, task.id, history)
+            
+            # Response is now a ResponseFormat object directly, no need to convert
             print(f"🤖 Agent Response: action={response_obj.action}, status={response_obj.status}")
             print(f"   Message: {response_obj.message}")
+
+            # Delegation logic
             if response_obj.action == "call_next_agent":
                 print(f"🔄 Delegating to agent: {response_obj.agent_name} (input_required)")
                 delegation_message = new_agent_text_message(
@@ -96,17 +113,23 @@ class GenericAgentExecutor(AgentExecutor):
                     self.ongoing_tasks.append(stream)
 
                 # manage the streams using methods from the delegator
-                delegation_complete = await self.manage_streams(self.ongoing_tasks, updater, response_obj.agent_name)
+                delegation_complete = await self.delegator.manage_streams(
+                    self.ongoing_tasks, 
+                    response_obj.agent_name or "unknown_agent"
+                )
+                
+                # TODO: After delegation completes, collect artifacts and create final response
 
             elif response_obj.status == "completed":
                 # Normal task completion - use real A2A types
+                # Always use create_artifact_parts for consistency
                 if response_obj.artifacts:
-                    # add artifact id checking / logging can be done here
-                    parts = artifact_dict_to_parts(response_obj.artifacts)
+                    parts = create_artifact_parts(response_obj.artifacts)
                     updater.add_artifact(parts, name=f'{self.agent.agent_name}-result')
                 else:
-                    part = Part(root=TextPart(text=response_obj.message))
-                    updater.add_artifact([part], name=f'{self.agent.agent_name}-result')
+                    # Create artifact from message when no explicit artifacts
+                    parts = create_artifact_parts(response_obj.message)
+                    updater.add_artifact(parts, name=f'{self.agent.agent_name}-result')
                 updater.complete()
 
             elif response_obj.status == "input_required" and response_obj.action == "answer":
@@ -153,42 +176,4 @@ class GenericAgentExecutor(AgentExecutor):
         # No-op for test executor
         pass
 
-    async def manage_streams(self, ongoing_streams, task_updater, agent_name="remote_agent"):
-        """
-        Consumes all ongoing async generator streams, updates the task, and returns True if all streams are complete.
-        """
-        logger = logging.getLogger(__name__)
-        streams_done = [False] * len(ongoing_streams)
-        tasks = []
 
-        async def consume_stream(idx, stream):
-            try:
-                async for event in stream:
-                    logger.info(f"[{agent_name}] Stream {idx} event: {event}")
-                    # Handle event types
-                    if event.get("type") == "Message":
-                        # Update task with message
-                        task_updater.update_status("working", event)
-                    elif event.get("type") == "TaskArtifactUpdateEvent":
-                        # Add artifact to task
-                        task_updater.add_artifact(event.get("artifact"))
-                    # Status of delegated tasks
-                    # elif event.get("type") == "TaskStatusUpdateEvent":
-                    #     # Update task status
-                    #     task_updater.update_status(event.get("status"), event)
-                    # Add more event types as needed
-            except Exception as e:
-                logger.error(f"[{agent_name}] Stream {idx} error: {e}")
-                task_updater.update_status("failed", {"error": str(e)})
-            finally:
-                streams_done[idx] = True
-
-        # Launch all stream consumers
-        for idx, stream in enumerate(ongoing_streams):
-            tasks.append(asyncio.create_task(consume_stream(idx, stream)))
-
-        # Wait for all streams to finish
-        await asyncio.gather(*tasks)
-
-        # All streams are done if all True
-        return all(streams_done)

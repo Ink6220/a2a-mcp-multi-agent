@@ -1,8 +1,7 @@
 from abc import ABC, abstractmethod
-from typing import Any, Dict, Literal, Union, AsyncGenerator, Self
+from typing import Any, Dict, Literal, Union, AsyncGenerator, Self, Optional, List
 from collections.abc import AsyncIterable
-from pydantic import BaseModel, Field, model_validator
-from typing import Literal, Optional, List, Dict, Any
+from pydantic import BaseModel, Field, model_validator, ValidationError
 from a2a.types import MessageSendParams, AgentCard
 from a2a_mcp.common.types import CustomAgentCard, AgentCard
 from a2a_mcp.common.card_discovery import A2ACardDiscovery
@@ -10,9 +9,6 @@ import json
 import uuid
 import time
 from colorama import Fore, Style, init
-
-from pydantic import BaseModel, Field, ValidationError, model_validator
-from typing import Literal, Optional, Dict, Any
 from datetime import datetime, timezone, timedelta
 
 # Define UTC+7 timezone
@@ -35,29 +31,27 @@ class ResponseFormat(BaseModel):
         description="System-defined flow status. Indicates if the task is complete, requires input, or has failed."
     )
     
-    custom_status: str = Field(
-        ...,
-        description="Optional custom state such as 'hang_up', 'timeout', etc. for extended flow semantics."
-    )
-    
-    # A2A protocol text fields, message is required, other parts depend on action
-
     message: str = Field(
         ...,
-        description="Message content, passed to the user for answering or asking."
+        description="Message content, passed to caller of the agent (can be user or another agent)."
+    )
+
+    # Optional fields with proper defaults
+    custom_status: Optional[str] = Field(
+        default=None,
+        description="Optional custom state such as 'hang_up', 'timeout', etc. for extended flow semantics."
     )
 
     agent_name: Optional[str] = Field(
-        None,
+        default=None,
         description="Name of the agent to call, required if action is 'call_next_agent'."
     )
 
     next_agent_instruction: Optional[str] = Field(
         None,
-        description="Message content, passed to the next agent as an instruction TODO"
+        description="Message content, passed to the next agent as Clear description of the task to be executed"
     )
     
-    #TODO artifacts: Optional[Dict[str, Union[str, float, int, bool, None, List[Any], Dict[str, Any]]]] = Field(
     artifacts: Optional[str] = Field(
         default=None,
         description="Optional structured JSON data to be passed as artifacts; must be JSON-serializable."
@@ -122,7 +116,7 @@ class BaseAgent(ABC):
 
 
     @abstractmethod
-    async def invoke(self, query: str, context_id: str, task_id: str) -> Dict[str, Any]:
+    async def invoke(self, query: str, context_id: str, task_id: str, history: str) -> ResponseFormat:
         """Invoke the agent with a query and return a single response."""
         pass
 

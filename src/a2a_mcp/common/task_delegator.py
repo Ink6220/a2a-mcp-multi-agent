@@ -1,10 +1,14 @@
 # task delegator to be instantiated inside the executor 
 # Hanldes the logic how to pass tasks to other agents
-from typing import AsyncGenerator
+import logging
+import asyncio
+from typing import AsyncGenerator, List
 from uuid import uuid4
 from a2a.server.tasks import TaskUpdater
-from a2a.types import Message, MessageSendParams, Part, TextPart, Role
+from a2a.types import Message, MessageSendParams, Part, TextPart, Role, TaskState
+from a2a.utils import new_agent_text_message, DataPart
 from a2a_mcp.common.base_agent.base_agent import ResponseFormat, BaseAgent, MessageSendParams
+import json 
 
 class TaskDelegator():
     def __init__(self, updater: TaskUpdater, agent: BaseAgent, task_context_id: str) -> None:
@@ -21,7 +25,7 @@ class TaskDelegator():
         # Extract required fields
         agent_name = response_obj.agent_name
         instruction = response_obj.next_agent_instruction
-        artifacts = response_obj.artifacts # TODO: add schema / custom data here (not included atm)
+        artifacts = json.loads(response_obj.artifacts) if response_obj.artifacts else {} # TODO: add schema / custom data here (not included atm)
         assert instruction and agent_name is not None
 
         # Use the correct method to get the agent card
@@ -38,12 +42,68 @@ class TaskDelegator():
                 messageId=str(uuid4()),
                 taskId=task_id,
                 contextId=self.task_context_id,
-                parts=[Part(root=TextPart(text=instruction))],
+                parts=[Part(root=TextPart(text=instruction)), Part(root=DataPart(data=artifacts))],
                 role=Role.agent,
             ),
         )
         # Return the async generator (stream) for the executor to consume
         return await self.agent.make_remote_agent_connection(target_agent_card, request)
+
+    async def manage_streams(self, ongoing_streams: List[AsyncGenerator], agent_name: str = "remote_agent"):
+        """
+        Consumes all ongoing async generator streams, updates the task, and returns True if all streams are complete.
+        """
+        logger = logging.getLogger(__name__)
+        streams_done = [False] * len(ongoing_streams)
+        tasks = []
+
+        async def consume_stream(idx, stream):
+            try:
+                async for event in stream:
+                    logger.info(f"[{agent_name}] Stream {idx} event: {event}")
+                    # Handle event types
+                    if event.get("type") == "Message":
+                        # Create proper message for task update
+                        message = new_agent_text_message(
+                            event.get("content", str(event)),
+                            self.task_updater.context_id,
+                            self.task_updater.task_id,
+                        )
+                        self.task_updater.update_status(TaskState.working, message)
+                    elif event.get("type") == "TaskArtifactUpdateEvent":
+                        # Add artifact to task
+                        artifact = event.get("artifact")
+                        if artifact:
+                            self.task_updater.add_artifact(artifact)
+                    elif event.get("type") == "error":
+                        # Handle error events
+                        error_message = new_agent_text_message(
+                            f"Remote agent error: {event.get('error', 'Unknown error')}",
+                            self.task_updater.context_id,
+                            self.task_updater.task_id,
+                        )
+                        self.task_updater.update_status(TaskState.failed, error_message)
+                    # Add more event types as needed
+            except Exception as e:
+                logger.error(f"[{agent_name}] Stream {idx} error: {e}")
+                error_message = new_agent_text_message(
+                    f"Stream processing error: {str(e)}",
+                    self.task_updater.context_id,
+                    self.task_updater.task_id,
+                )
+                self.task_updater.update_status(TaskState.failed, error_message)
+            finally:
+                streams_done[idx] = True
+
+        # Launch all stream consumers
+        for idx, stream in enumerate(ongoing_streams):
+            tasks.append(asyncio.create_task(consume_stream(idx, stream)))
+
+        # Wait for all streams to finish
+        await asyncio.gather(*tasks)
+
+        # All streams are done if all True
+        return all(streams_done)
 
 
     

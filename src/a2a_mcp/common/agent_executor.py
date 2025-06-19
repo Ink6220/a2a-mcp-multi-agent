@@ -25,23 +25,23 @@ import json
 from a2a.utils import new_agent_text_message, new_task
 from a2a.utils.errors import ServerError
 from a2a_mcp.common.base_agent.base_agent import BaseAgent, ResponseFormat
-from a2a_mcp.common.context_memory import ContextMemory
-logger = logging.getLogger(__name__)
+from a2a_mcp.common.memory_management import MemoryManagement
 import httpx  
 from a2a_mcp.common.remote_agent_connection import RemoteAgentConnections
 
 class GenericAgentExecutor(AgentExecutor):
     """AgentExecutor used by the tragel agents."""
 
-    def __init__(self, agent: BaseAgent):  
+    def __init__(self, agent: BaseAgent, memory: MemoryManagement):  
         self.agent = agent
+        self.memory = memory
 
     async def execute(
         self,
         context: RequestContext,
         event_queue: EventQueue,
     ) -> None:
-        logger.info(f'Executing agent {self.agent.agent_name}')
+        print(f'Executing agent {self.agent.agent_name}')
         error = self._validate_request(context)
         if error:
             raise ServerError(error=InvalidParamsError())
@@ -54,10 +54,22 @@ class GenericAgentExecutor(AgentExecutor):
             task = new_task(context.message)
             event_queue.enqueue_event(task)
 
-        updater = TaskUpdater(event_queue, task.id, task.contextId)
+        updater = TaskUpdater(event_queue, task.id, task.contextId)        
+        context_tasks = await self.memory.get_tasks_by_context(task.contextId)
+        
+        # Log parameters before invoke
+        print(f"\033[92m=== INVOKE PARAMETERS ===\033[0m")
+        print(f"Query: {query}")
+        print(f"Context ID: {task.contextId}")
+        print(f"Task ID: {task.id}")
+        print(f"Context Tasks Count: {len(context_tasks)}")
+        if context_tasks:
+            for task_id, context_task in context_tasks.items():
+                print(f"  Task {task_id}: {context_task.id}")
+        print(f"\033[92m========================\033[0m")
 
+        item = await self.agent.invoke(query, task.contextId, task.id, context_tasks)
         # TODO: Implement agent.stream() later
-        item = await self.agent.invoke(query, task)
 
         # Agent to Agent call will return events,
         # Update the relevant ids to proxy back.

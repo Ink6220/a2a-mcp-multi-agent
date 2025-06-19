@@ -122,8 +122,7 @@ class A2AOpenaiAgent(BaseAgent):
             start_time = time.time()
             result = await Runner.run(self.agent, query)
             print(Fore.GREEN + Style.BRIGHT + "[Runner.run]:" + Style.RESET_ALL, time.time() - start_time)
-            print(result.raw_responses[0].usage)
-            print(result.final_output)
+            print(Fore.GREEN + Style.BRIGHT, result.final_output, Style.RESET_ALL)
             api_usage = result.raw_responses[0].usage
             # TODO: Shold we save conversation history here ? 
         
@@ -139,7 +138,7 @@ class A2AOpenaiAgent(BaseAgent):
                 extra_usage=ExtraUsage(reasoning_tokens=api_usage.input_tokens_details.cached_tokens, cache_tokens=api_usage.output_tokens_details.reasoning_tokens)
             )
             self.record_usage(usage)
-            print(usage)
+
             # Convert result to ResponseFormat
             try:
                 return result.final_output

@@ -34,7 +34,7 @@ logger = logging.getLogger(__name__)
 import httpx  
 
 def artifact_dict_to_parts(artifact_dict: Dict[str, Any]) -> List[Part]:
-    return [Part(root=TextPart(text=json.dumps(artifact_dict, indent=2)))]
+    return [Part(root=TextPart(text=json.dumps(artifact_dict, indent=2, ensure_ascii=False)))]
 
 class GenericDelegatorAgentExecutor(AgentExecutor):
     """AgentExecutor used by the tragel agents."""
@@ -71,7 +71,7 @@ class GenericDelegatorAgentExecutor(AgentExecutor):
                                     if hasattr(root_part, 'text'):
                                         parts.append(root_part.text)
                                     elif hasattr(root_part, 'data'):
-                                        parts.append(f"[Data: {json.dumps(root_part.data)}]")
+                                        parts.append(f"[Data: {json.dumps(root_part.data, ensure_ascii=False)}]")
                                     elif hasattr(root_part, 'file') and hasattr(root_part.file, 'name'):
                                         parts.append(f"[File: {root_part.file.name}]")
                                     else:

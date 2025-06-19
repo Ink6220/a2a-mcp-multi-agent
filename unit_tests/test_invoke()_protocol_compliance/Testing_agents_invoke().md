@@ -2,13 +2,19 @@
 ## Agent invoke() Method with ResponseFormat(BaseModel)
 
 ### 🎯 **Objective**
-Verify that an agent's `invoke()` method returns a `ResponseFormat(BaseModel)` object that is fully compliant with the A2A protocol. This test validates the attributes of the returned object, ensuring type safety and structural correctness.
+Verify that an agent's `invoke()` method returns a `ResponseFormat(BaseModel)` object that is fully compliant with the A2A protocol. This comprehensive test suite validates:
+
+1. **Basic A2A Compliance**: Proper ResponseFormat structure and values
+2. **Pydantic Validation**: Type safety and field validation 
+3. **Error Handling**: Graceful handling of validation and runtime errors
+4. **Delegation Logic**: Conditional field requirements for agent delegation
+5. **Type Safety**: Proper handling of optional fields and artifacts
 
 ---
 
 ## 🏗️ **Architecture: `ResponseFormat` Objects**
 
-The new architecture requires that the agent's `invoke()` method returns an instance of a `ResponseFormat` class, which inherits from `pydantic.BaseModel` (or a mock equivalent for testing). This enforces a strict, type-safe contract between the agent and the executor.
+The new architecture requires that the agent's `invoke()` method returns an instance of a `ResponseFormat` class, which inherits from `pydantic.BaseModel`. This enforces a strict, type-safe contract between the agent and the executor, as demonstrated in `basic_executor_with_delegator.py`.
 
 ### **1. A2A Protocol Requirements on `ResponseFormat`:**
 The returned `ResponseFormat` object **MUST** have these attributes:
@@ -32,35 +38,82 @@ class ResponseFormat(BaseModel):
     custom_status: Optional[str] = None
     agent_name: Optional[str] = None
     next_agent_instruction: Optional[str] = None
-    next_agent_schema: Optional[Dict[str, Any]] = None
+    artifacts: Optional[str] = None
 ```
 
-### **3. Conditional Requirements:**
+### **3. Conditional Requirements & Type Safety:**
+The `ResponseFormat` class includes a Pydantic `@model_validator` that enforces conditional requirements:
+
+```python
+@model_validator(mode="after")
+def validate_required_fields(self) -> Self:
+    if self.action == "call_next_agent":
+        if not self.agent_name:
+            raise ValueError("`agent_name` is required when action is 'call_next_agent'")
+        if not self.next_agent_instruction:
+            raise ValueError("`next_agent_instruction` is required when action is 'call_next_agent'")
+    return self
+```
+
 When `action` is `"call_next_agent"`, the following optional fields become **required**:
 - `agent_name`: str - Name of the agent to call
 - `next_agent_instruction`: str - Instruction for the next agent
 
-**Key Point:** The test validates the **presence and types of the core A2A attributes** and the **conditional requirements** on the returned object.
+**Key Point:** The test validates the **presence and types of the core A2A attributes**, **conditional requirements**, and **Pydantic validation behavior** on the returned object.
 
 ---
 
-## 🧪 **Testing Framework (`test_agent_a2a_compliance.py`)**
+## 🧪 **Enhanced Testing Framework (`test_agent_a2a_compliance.py`)**
 
-The updated test framework is designed to validate `ResponseFormat` objects.
+The updated test framework now includes comprehensive validation testing:
 
 #### **Key Features:**
 - ✅ **Object Validation**: Checks if `invoke()` returns an object, not a dictionary.
 - ✅ **Attribute Validation**: Verifies the presence of required A2A attributes (`action`, `status`, `message`).
 - ✅ **Value Validation**: Ensures attributes have valid values (correct Literal values).
 - ✅ **Conditional Validation**: Validates required fields for delegation scenarios.
+- ✅ **Pydantic ValidationError Testing**: Tests type safety and field validation.
+- ✅ **Error Handling Testing**: Tests agent behavior during errors.
+- ✅ **Type Safety Testing**: Tests optional fields and artifacts handling.
 - ✅ **Example Agents**: Includes examples of compliant and non-compliant agents using the `ResponseFormat` model.
+
+### **New Test Categories:**
+
+#### **1. Pydantic Validation Tests**
+Tests the built-in type safety checker:
+```python
+validation_results = A2AComplianceTester.test_pydantic_validation_errors()
+print_validation_report(validation_results)
+```
+
+Covers:
+- Missing required fields
+- Invalid action/status literals
+- Missing delegation fields
+- Conditional validation logic
+
+#### **2. Error Handling Tests**
+Tests agent behavior during errors:
+```python
+error_agent = ExampleErrorHandlingAgent()
+error_queries = ["Normal query", "Please raise_error", "Test validation_error scenario"]
+error_results = await A2AComplianceTester.test_agent_invoke_compliance(error_agent, error_queries)
+```
+
+#### **3. Type Safety Tests**
+Tests optional field handling:
+```python
+type_safety_agent = ExampleTypeSafetyAgent()
+type_queries = ["Normal query", "Query with artifacts", "Query with custom_status"]
+type_results = await A2AComplianceTester.test_agent_invoke_compliance(type_safety_agent, type_queries)
+```
 
 ---
 
 ## 🚀 **How to Run Tests**
 
-### **1. Run the Test Suite Directly**
-This will test the example agents included in the file.
+### **1. Run the Enhanced Test Suite Directly**
+This will test all validation scenarios and example agents.
 ```bash
 cd unit_tests/test_invoke()_protocol_compliance
 python test_agent_a2a_compliance.py
@@ -68,27 +121,41 @@ python test_agent_a2a_compliance.py
 
 **Expected Output:**
 ```
-🧪 A2A Protocol Compliance Tester (Updated ResponseFormat)
+🧪 A2A Protocol Compliance Tester (Enhanced with Validation Tests)
+======================================================================
+
+📋 Testing Pydantic ValidationError Handling:
+
+============================================================
+PYDANTIC VALIDATION TESTS
+============================================================
+Total Tests: 6
+Passed: 6
+Failed: 0
+Success Rate: 100.0%
+Status: ✅ ALL VALIDATION TESTS PASSED
+
+============================================================
+VALIDATION TEST DETAILS
 ============================================================
 
+✅ Test 1: PASSED
+   Description: Missing required fields
+   Expected ValidationError: Field required [type=missing, input={}, url=...
+
+✅ Test 2: PASSED
+   Description: Invalid action literal
+   Expected ValidationError: Input should be 'answer' or 'call_next_agent'...
+
+📋 Testing Example Compliant Agent:
+
+============================================================
 A2A COMPLIANCE REPORT
 ============================================================
 Agent Name: example-compliant-agent
 Status: ✅ FULLY COMPLIANT
 Compliance: 100.0% (4/4 passed)
-
---- TEST DETAILS ---
-
-✅ Test 1: Hello, can you help me?
-   - Status: PASSED
-   - Response: action=answer, status=completed
-   - Message: 'I have processed your request: Hello, can you help...'
-✅ Test 2: What is 2 + 2?
-   - Status: PASSED
-   - Response: action=answer, status=completed
-   - Message: 'I have processed your request: What is 2 + 2?...'
 ...
-============================================================
 ```
 
 ### **2. Test Your Own Agent**
@@ -96,17 +163,21 @@ To test your agent, ensure its `invoke()` method returns an instance of your `Re
 ```python
 # your_agent_test.py
 import asyncio
-from test_agent_a2a_compliance import A2AComplianceTester, print_compliance_report
+from test_agent_a2a_compliance import A2AComplianceTester, print_compliance_report, print_validation_report
 from your_agent_module import YourAgent # Import your agent
 
 async def run_test():
-    # 1. Instantiate your agent
+    # 1. Test Pydantic validation first
+    validation_results = A2AComplianceTester.test_pydantic_validation_errors()
+    print_validation_report(validation_results)
+    
+    # 2. Instantiate your agent
     my_agent = YourAgent()
 
-    # 2. Run the compliance test
+    # 3. Run the compliance test
     results = await A2AComplianceTester.test_agent_invoke_compliance(my_agent)
 
-    # 3. Print the report
+    # 4. Print the report
     print_compliance_report(results)
 
 if __name__ == "__main__":
@@ -118,14 +189,14 @@ if __name__ == "__main__":
 ## 🎨 **Example Implementations**
 
 ### **Compliant Agent (CORRECT):**
-This agent correctly returns a `ResponseFormat` object.
+This agent correctly returns a `ResponseFormat` object and handles all scenarios.
 ```python
 from response_format_module import ResponseFormat # Your BaseModel
 
 class YourCompliantAgent:
     agent_name = "your-compliant-agent"
     
-    async def invoke(self, query: str, session_id: str) -> ResponseFormat:
+    async def invoke(self, query: str, context_id: str, task_id: str, history: str) -> ResponseFormat:
         if "delegate" in query.lower():
             return ResponseFormat(
                 action="call_next_agent",
@@ -144,7 +215,42 @@ class YourCompliantAgent:
             return ResponseFormat(
                 action="answer",
                 status="completed",
-                message=f"Processed: {query}"
+                message=f"Processed: {query}",
+                artifacts='{"result": "processed_data"}'  # Optional JSON artifacts
+            )
+```
+
+### **Error Handling Agent (BEST PRACTICE):**
+This agent demonstrates proper error handling as seen in actual agent implementations:
+```python
+class ErrorHandlingAgent:
+    agent_name = "error-handling-agent"
+    
+    async def invoke(self, query: str, context_id: str, task_id: str, history: str) -> ResponseFormat:
+        try:
+            # Main agent logic here
+            result = await self.process_query(query)
+            
+            return ResponseFormat(
+                action="answer",
+                status="completed",
+                message=f"Successfully processed: {result}"
+            )
+        except ValidationError as ve:
+            # Handle Pydantic validation errors
+            return ResponseFormat(
+                action="answer",
+                status="failed",
+                message="Response format validation failed",
+                custom_status="validation_error"
+            )
+        except Exception as e:
+            # Handle other errors gracefully
+            return ResponseFormat(
+                action="answer",
+                status="failed", 
+                message="An error occurred while processing your request",
+                custom_status="processing_error"
             )
 ```
 
@@ -154,7 +260,7 @@ This agent incorrectly returns a dictionary instead of a `ResponseFormat` object
 class NonCompliantAgent:
     agent_name = "dict-returning-agent"
     
-    async def invoke(self, query: str, session_id: str) -> dict:
+    async def invoke(self, query: str, context_id: str, task_id: str, history: str) -> dict:
         # ❌ WRONG: Returns a dict, will fail the test.
         return {
             "action": "answer",
@@ -169,8 +275,8 @@ This agent returns a `ResponseFormat` object with an invalid action value.
 class InvalidActionAgent:
     agent_name = "invalid-action-agent"
 
-    async def invoke(self, query: str, session_id: str) -> ResponseFormat:
-        # ❌ WRONG: Invalid action value
+    async def invoke(self, query: str, context_id: str, task_id: str, history: str) -> ResponseFormat:
+        # ❌ WRONG: Invalid action value - will trigger ValidationError
         return ResponseFormat(
             action="invalid_action",  # Must be "answer" or "call_next_agent"
             status="completed",
@@ -184,8 +290,9 @@ This agent tries to delegate but is missing required conditional fields.
 class MissingDelegationFieldsAgent:
     agent_name = "missing-delegation-agent"
 
-    async def invoke(self, query: str, session_id: str) -> ResponseFormat:
+    async def invoke(self, query: str, context_id: str, task_id: str, history: str) -> ResponseFormat:
         # ❌ WRONG: Missing agent_name and next_agent_instruction for delegation
+        # This will trigger the @model_validator ValidationError
         return ResponseFormat(
             action="call_next_agent",
             status="completed", 
@@ -196,7 +303,7 @@ class MissingDelegationFieldsAgent:
 
 ---
 
-## 🚨 **Common Compliance Issues**
+## 🚨 **Common Compliance Issues & Solutions**
 
 ### **1. Returning a Dictionary Instead of an Object**
 - **Symptom:** Test fails with `Response is not an object`.
@@ -226,7 +333,7 @@ class ResponseFormat(BaseModel):
 ```
 
 ### **3. Invalid Action or Status Values**
-- **Symptom:** Test fails with `'action' must be one of ['answer', 'call_next_agent']`.
+- **Symptom:** Test fails with `'action' must be one of ['answer', 'call_next_agent']` or Pydantic ValidationError.
 - **Solution:** Use only the allowed values for action and status fields.
 ```python
 # ❌ WRONG
@@ -237,10 +344,10 @@ return ResponseFormat(action="answer", status="completed", ...)
 ```
 
 ### **4. Missing Delegation Fields**
-- **Symptom:** Test fails with `'agent_name' is required when action is 'call_next_agent'`.
+- **Symptom:** Test fails with `'agent_name' is required when action is 'call_next_agent'` or Pydantic ValidationError.
 - **Solution:** Include both `agent_name` and `next_agent_instruction` when delegating.
 ```python
-# ❌ WRONG
+# ❌ WRONG - Will trigger @model_validator ValidationError
 return ResponseFormat(action="call_next_agent", status="completed", message="...")
 
 # ✅ CORRECT
@@ -253,11 +360,39 @@ return ResponseFormat(
 )
 ```
 
+### **5. ValidationError Handling**
+- **Symptom:** Agent crashes with ValidationError during runtime.
+- **Solution:** Wrap ResponseFormat creation in try/catch blocks.
+```python
+# ✅ BEST PRACTICE
+try:
+    return ResponseFormat(
+        action=parsed_action,
+        status=parsed_status,
+        message=parsed_message
+    )
+except ValidationError as ve:
+    # Return a safe fallback response
+    return ResponseFormat(
+        action="answer",
+        status="failed",
+        message="Response validation failed"
+    )
+```
+
 ---
 
 ## 🔍 **Executor Integration**
 
-The `GenericAgentExecutor` expects the `ResponseFormat` object from `invoke()`. It will access the attributes of this object (`response.action`, `response.status`, `response.message`, etc.) to manage the task state. The object itself (or a dictionary representation of it) is what gets passed to `add_artifact()`.
+The `GenericAgentExecutor` (as seen in `basic_executor_with_delegator.py`) expects the `ResponseFormat` object from `invoke()`. It will:
+
+1. **Access Response Attributes**: `response.action`, `response.status`, `response.message`, etc.
+2. **Handle Delegation**: Use `response.agent_name` and `response.next_agent_instruction` for task delegation
+3. **Create Artifacts**: Use `response.artifacts` or `response.message` for artifact creation
+4. **Manage State**: Update task state based on `response.status`
+5. **Error Handling**: Gracefully handle ValidationErrors and other exceptions
+
+The executor includes helper functions like `create_artifact_parts()` to handle JSON artifacts properly.
 
 ---
 
@@ -268,6 +403,26 @@ Your agent is A2A compliant when:
 - ✅ **A2A Attributes Present**: The object has all required A2A attributes.
 - ✅ **Valid Values**: All A2A attributes have valid values from their allowed sets.
 - ✅ **Conditional Fields**: Required conditional fields are present for delegation.
-- ✅ **Passes Tests**: The `A2AComplianceTester` reports 100% compliance.
+- ✅ **Passes Validation Tests**: The Pydantic validation tests pass 100%.
+- ✅ **Handles Errors**: The agent gracefully handles ValidationErrors and other exceptions.
+- ✅ **Type Safety**: Optional fields and artifacts are handled correctly.
+- ✅ **Passes Compliance Tests**: The `A2AComplianceTester` reports 100% compliance.
 
-When all these criteria are met, your agent is ready for robust, type-safe integration with the executor. 
+When all these criteria are met, your agent is ready for robust, type-safe integration with the executor as demonstrated in `basic_executor_with_delegator.py`.
+
+---
+
+## 📊 **Test Coverage Summary**
+
+The enhanced test suite covers:
+
+| Test Category | Coverage | Purpose |
+|---------------|----------|---------|
+| **Basic Compliance** | Core A2A attributes and values | Validates fundamental protocol adherence |
+| **Pydantic Validation** | Type safety and field validation | Tests the ResponseFormat model validator |
+| **Error Handling** | Exception scenarios and recovery | Ensures graceful error handling |
+| **Type Safety** | Optional fields and artifacts | Validates proper typing and serialization |
+| **Delegation Logic** | Conditional field requirements | Tests agent-to-agent delegation scenarios |
+| **Edge Cases** | Invalid inputs and boundary conditions | Ensures robustness under stress |
+
+This comprehensive testing ensures your agent will work correctly with the `basic_executor_with_delegator.py` and handle all scenarios defined in the A2A protocol. 

@@ -25,22 +25,12 @@ from a2a.utils.errors import ServerError
 from a2a_mcp.common.task_delegator import TaskDelegator
 from a2a_mcp.common.base_agent.base_agent import BaseAgent, ResponseFormat
 from a2a_mcp.common.memory_management import MemoryManagement, ManageTask
+from a2a_mcp.common.utils import artifact_dict_to_parts
 import logging
 import json
 import asyncio
 
 logger = logging.getLogger(__name__)
-
-def artifact_dict_to_parts(artifact_dict: Dict[str, Any]) -> List[Part]:
-    """Convert artifact dictionary to list of parts.
-    
-    Args:
-        artifact_dict: Dictionary containing artifact data
-        
-    Returns:
-        List[Part]: List of parts for the artifact
-    """
-    return [Part(root=TextPart(text=json.dumps(artifact_dict, indent=2, ensure_ascii=False)))]
 
 class BaseAgentExecutor(AgentExecutor):
     """Base executor class with memory management and delegation capabilities.

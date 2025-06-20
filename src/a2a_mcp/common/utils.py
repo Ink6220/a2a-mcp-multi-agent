@@ -6,6 +6,15 @@ import google.generativeai as genai
 
 from a2a_mcp.common.types import ServerConfig
 
+from a2a.types import (
+    Message,
+    Part,
+    Role,
+    TextPart,
+    DataPart
+)
+import json
+
 
 logger = logging.getLogger(__name__)
 
@@ -49,3 +58,28 @@ def get_mcp_server_config() -> ServerConfig:
         transport='sse',
         url='http://localhost:10100/sse',
     )
+
+
+def get_data_parts(parts: list[Part]) -> list[str]:
+    """Extracts Data content from all DataPart objects in a list of Parts.
+
+    Args:
+        parts: A list of `Part` objects.
+
+    Returns:
+        A list of strings containing the text content from any `DataPart` objects found.
+    """
+    return [json.dumps(part.root.data, ensure_ascii=False) for part in parts if isinstance(part.root, DataPart)]
+
+
+def get_message_data(message: Message, delimiter: str = '\n') -> str:
+    """Extracts and joins all data content from a Message's parts.
+
+    Args:
+        message: The `Message` object.
+        delimiter: The string to use when joining data from multiple DataParts.
+
+    Returns:
+        A single string containing all data content, or an empty string if no data parts are found.
+    """
+    return delimiter.join(get_data_parts(message.parts))

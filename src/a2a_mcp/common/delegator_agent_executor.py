@@ -25,13 +25,13 @@ from a2a.types import (
 )
 from uuid import uuid4
 from typing import AsyncGenerator, List, Dict, Any
+from a2a_mcp.common.utils import get_message_data
 from a2a.utils import new_agent_text_message, new_task
 from a2a.utils.errors import ServerError
 from a2a_mcp.common.task_delegator import TaskDelegator
 from a2a_mcp.common.base_agent.base_agent import BaseAgent, ResponseFormat
 from a2a_mcp.common.context_memory import ContextMemory
 logger = logging.getLogger(__name__)
-import httpx  
 
 def artifact_dict_to_parts(artifact_dict: Dict[str, Any]) -> List[Part]:
     return [Part(root=TextPart(text=json.dumps(artifact_dict, indent=2, ensure_ascii=False)))]
@@ -109,7 +109,10 @@ class GenericDelegatorAgentExecutor(AgentExecutor):
 
         print(f"🚀 Executing A2A-compliant agent: {self.agent.agent_name}")
         query = context.get_user_input()
+        data_input = get_message_data(context.message)
         print(f"📝 User Query: {query}")
+        print(f"📝 Data input: {data_input}")
+        query = f"{query}\n{data_input}"
 
         task = context.current_task
 

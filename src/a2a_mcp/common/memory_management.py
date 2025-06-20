@@ -117,8 +117,9 @@ class MemoryManagement(InMemoryTaskStore):
     
     async def get_all_context_tasks(self) -> Dict[str, Dict[str, ManageTask]]:
         """
-        Get a deep copy of all context tasks, This method is thread safe and returns a copy
+        Get a deep copy of all context tasks, This method is thread safe and returns a deep-copy
         This method is good enough to push to external databases
+        Any changes here will not affect task store
         """
         async with self.lock:
             return copy.deepcopy(self.contexts)

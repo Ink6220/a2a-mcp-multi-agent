@@ -70,48 +70,6 @@ class BaseAgentExecutor(AgentExecutor):
             return f"[File: {part.root.file.name}]"
         return str(part.root)
 
-    async def process_history(self, context_id: str) -> str:
-        """Process conversation history from memory management.
-        
-        Args:
-            context_id: Context ID to get history for
-            
-        Returns:
-            str: Formatted conversation history
-        """
-        lines = []
-        context_tasks = await self.memory.get_tasks_by_context(context_id)
-        
-        for task_id, task in context_tasks.items():
-            if not task.history:
-                continue
-                
-            lines.append(f"=== Task {task.id} ===")
-            for message in task.history:
-                if not (hasattr(message, 'kind') and message.kind == 'message'):
-                    continue
-                    
-                if message.parts:
-                    parts = [self._format_part_content(part) for part in message.parts]
-                    if parts:
-                        lines.append(f"{message.role}: {' '.join(parts)}")
-            
-            # Include tool calls and outputs if present
-            if hasattr(task, 'tool_calls') and task.tool_calls:
-                lines.append("--- Tool Calls ---")
-                for i, tool_call in enumerate(task.tool_calls):
-                    lines.append(f"Tool {i+1} - Name: {tool_call.tool_name}")
-                    lines.append(f"Arguments: {json.dumps(tool_call.arguments, ensure_ascii=False)}")
-            
-            if hasattr(task, 'tool_outputs') and task.tool_outputs:
-                lines.append("--- Tool Outputs ---")
-                for i, tool_output in enumerate(task.tool_outputs):
-                    lines.append(f"Tool {i+1} Output: {tool_output.output}")
-            
-            lines.append("")
-            
-        return "\n".join(lines)
-
     async def execute(
         self,
         context: RequestContext,
@@ -156,8 +114,6 @@ class BaseAgentExecutor(AgentExecutor):
         updater.update_status(TaskState.working, working_message)
 
         try:
-            # Get history from memory management
-            history = await self.process_history(context_id)
             context_tasks = await self.memory.get_tasks_by_context(context_id)
             
             # Log parameters before invoke
@@ -171,7 +127,7 @@ class BaseAgentExecutor(AgentExecutor):
                     print(f"  Task {task_id}: {context_task.id}")
             print(f"\033[92m========================\033[0m")
             
-            response = await self.agent.invoke(query, context_id, task_id, history)
+            response = await self.agent.invoke(query, context_id, task_id, context_tasks)
             
             print(f"🤖 Agent Response: action={response.action}, status={response.status}")
             print(f"   Message: {response.message}")

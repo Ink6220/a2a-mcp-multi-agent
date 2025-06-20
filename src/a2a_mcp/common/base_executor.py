@@ -2,7 +2,7 @@
 This is the base class for the development of new agents. 
 They are 2 helper classes 
 1. uses the base task_delegator to delegate tasks to other agents.
-2. uses context_memory to store the context of the task.
+2. uses memory management to store task context and history.
 
 """
 
@@ -22,9 +22,9 @@ from a2a.types import (
 )
 from a2a.utils import new_agent_text_message, new_task
 from a2a.utils.errors import ServerError
-from a2a_mcp.common.context_memory import ContextMemory
 from a2a_mcp.common.task_delegator import TaskDelegator
 from a2a_mcp.common.base_agent.base_agent import BaseAgent, ResponseFormat
+from a2a_mcp.common.memory_management import MemoryManagement, ManageTask
 import logging
 import json
 import asyncio
@@ -46,21 +46,20 @@ class BaseAgentExecutor(AgentExecutor):
     """Base executor class with memory management and delegation capabilities.
     
     This executor provides:
-    1. Context memory management for maintaining conversation history
+    1. Memory management for maintaining conversation history and tool usage
     2. Task delegation capabilities via TaskDelegator
     3. Proper type safety and error handling
     """
     
-    def __init__(self, agent: BaseAgent, task_store: InMemoryTaskStore):
-        """Initialize the executor with an agent and task store.
+    def __init__(self, agent: BaseAgent, memory: MemoryManagement):
+        """Initialize the executor with an agent and memory manager.
         
         Args:
             agent: The base agent implementation
-            task_store: Store for maintaining task history
+            memory: Memory management instance for task history
         """
         self.agent = agent
-        self.task_store = task_store
-        self.context_stores: Dict[str, ContextMemory] = {}
+        self.memory = memory
         self.delegator: Optional[TaskDelegator] = None
         self.ongoing_tasks: List[AsyncGenerator[dict, None]] = []
 
@@ -81,17 +80,19 @@ class BaseAgentExecutor(AgentExecutor):
             return f"[File: {part.root.file.name}]"
         return str(part.root)
 
-    def process_history(self, context_store: ContextMemory) -> str:
-        """Process conversation history from context memory.
+    async def process_history(self, context_id: str) -> str:
+        """Process conversation history from memory management.
         
         Args:
-            context_store: Context memory containing tasks
+            context_id: Context ID to get history for
             
         Returns:
             str: Formatted conversation history
         """
         lines = []
-        for task in context_store.tasks:
+        context_tasks = await self.memory.get_tasks_by_context(context_id)
+        
+        for task_id, task in context_tasks.items():
             if not task.history:
                 continue
                 
@@ -104,6 +105,19 @@ class BaseAgentExecutor(AgentExecutor):
                     parts = [self._format_part_content(part) for part in message.parts]
                     if parts:
                         lines.append(f"{message.role}: {' '.join(parts)}")
+            
+            # Include tool calls and outputs if present
+            if hasattr(task, 'tool_calls') and task.tool_calls:
+                lines.append("--- Tool Calls ---")
+                for i, tool_call in enumerate(task.tool_calls):
+                    lines.append(f"Tool {i+1} - Name: {tool_call.tool_name}")
+                    lines.append(f"Arguments: {json.dumps(tool_call.arguments, ensure_ascii=False)}")
+            
+            if hasattr(task, 'tool_outputs') and task.tool_outputs:
+                lines.append("--- Tool Outputs ---")
+                for i, tool_output in enumerate(task.tool_outputs):
+                    lines.append(f"Tool {i+1} Output: {tool_output.output}")
+            
             lines.append("")
             
         return "\n".join(lines)
@@ -132,6 +146,9 @@ class BaseAgentExecutor(AgentExecutor):
         task = context.current_task or new_task(message)
         if not context.current_task:
             event_queue.enqueue_event(task)
+            # Convert to ManageTask and save to memory
+            manage_task = ManageTask.from_task(task)
+            await self.memory.save(manage_task)
 
         task_id = task.id
         context_id = task.contextId
@@ -148,25 +165,22 @@ class BaseAgentExecutor(AgentExecutor):
         )
         updater.update_status(TaskState.working, working_message)
 
-        # Memory management
-        if context_id not in self.context_stores:
-            self.context_stores[context_id] = ContextMemory()
-        context_store = self.context_stores[context_id]
-        
-        if existing_task := context_store.get_task(task_id):
-            context_store.update_task(task_id, task)
-            logger.info(f'Updated task {task_id} in context')
-        else:
-            context_store.add_task(task)
-            logger.info(f'Added new task {task_id} to context')
-
         try:
-            # Get history and invoke agent
-            task_history = await self.task_store.get(task_id)
-            if task_history:
-                logger.info(f'History: {task_history.model_dump_json(indent=2, exclude_none=True)}')
+            # Get history from memory management
+            history = await self.process_history(context_id)
+            context_tasks = await self.memory.get_tasks_by_context(context_id)
             
-            history = self.process_history(context_store)
+            # Log parameters before invoke
+            print(f"\033[92m=== INVOKE PARAMETERS ===\033[0m")
+            print(f"Query: {query}")
+            print(f"Context ID: {context_id}")
+            print(f"Task ID: {task_id}")
+            print(f"Context Tasks Count: {len(context_tasks)}")
+            if context_tasks:
+                for task_id, context_task in context_tasks.items():
+                    print(f"  Task {task_id}: {context_task.id}")
+            print(f"\033[92m========================\033[0m")
+            
             response = await self.agent.invoke(query, context_id, task_id, history)
             
             print(f"🤖 Agent Response: action={response.action}, status={response.status}")
@@ -191,6 +205,10 @@ class BaseAgentExecutor(AgentExecutor):
                     self.ongoing_tasks,
                     response.agent_name or "unknown_agent"
                 )
+
+                # TODO: Add second invoke call logic here
+                # TODO: Create function to piece together context etc from delegated agents
+                # look at simple_request_context_builder.py for reference
                 
             elif response.status == "completed":
                 if response.artifacts and isinstance(response.artifacts, dict):

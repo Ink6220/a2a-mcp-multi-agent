@@ -16,7 +16,7 @@ from a2a.server.request_handlers import DefaultRequestHandler
 from a2a.server.tasks import InMemoryPushNotifier
 
 from a2a_mcp.common.types import CustomAgentCard
-# from a2a_mcp.common.memory_management import MemoryManagement
+from a2a_mcp.common.memory_management import MemoryManagement
 from a2a_mcp.common.base_executor import BaseAgentExecutor
 from a2a_mcp.common.base_agent.a2a_agent_selector import A2AAgentSelector
 from a2a_mcp.common.base_mcp.filtered_mcp_server_sse import FilteredMCPServerSse

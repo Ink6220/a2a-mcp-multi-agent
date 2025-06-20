@@ -1,7 +1,7 @@
 # type: ignore
 import logging
 import os
-from typing import Dict, List
+from typing import Dict, List, Any
 
 import google.generativeai as genai
 

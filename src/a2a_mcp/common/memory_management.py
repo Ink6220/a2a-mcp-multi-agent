@@ -2,7 +2,7 @@ from a2a.server.tasks import InMemoryTaskStore
 from a2a.types import Task
 import logging
 from typing import Dict, Any, Optional, List, Union
-from a2a_mcp.common.base_agent.base_agent import ToolCall, ToolOutput
+from a2a_mcp.common.types import ToolCall, ToolOutput
 from pydantic import BaseModel, Field
 import copy
 

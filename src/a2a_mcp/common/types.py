@@ -1,7 +1,6 @@
 # type: ignore
 
-from typing import Any, List, Literal, Optional, Union
-
+from typing import Any, List, Literal, Optional, Union, Dict
 from pydantic import BaseModel, Field, model_validator
 from a2a.types import AgentCard
 
@@ -119,3 +118,10 @@ class CustomAgentCard(AgentCard):
     modelName: str = None
     systemPrompt: str = None
     nextAgent: List[str] = []
+
+class ToolCall(BaseModel):
+    tool_name: str
+    arguments: Dict[str, Any]
+
+class ToolOutput(BaseModel):
+    output: str

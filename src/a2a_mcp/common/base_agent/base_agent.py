@@ -4,7 +4,7 @@ from collections.abc import AsyncIterable
 from pydantic import BaseModel, Field, model_validator, ValidationError
 from a2a.types import MessageSendParams, AgentCard
 from a2a_mcp.common.memory_management import ManageTask
-from a2a_mcp.common.types import CustomAgentCard, AgentCard
+from a2a_mcp.common.types import CustomAgentCard, AgentCard, ToolCall, ToolOutput
 from a2a_mcp.common.card_discovery import A2ACardDiscovery
 import json
 import uuid
@@ -70,13 +70,6 @@ class ResponseFormat(BaseModel):
 class ExtraUsage(BaseModel):
     reasoning_tokens: int
     cache_tokens: int
-
-class ToolCall(BaseModel):
-    tool_name: str
-    arguments: Dict[str, Any]
-
-class ToolOutput(BaseModel):
-    output: str
 
 class Usage(BaseModel):
     usage_id: str

@@ -71,7 +71,7 @@ class GenericDelegatorAgentExecutor(AgentExecutor):
                                     if hasattr(root_part, 'text'):
                                         parts.append(root_part.text)
                                     elif hasattr(root_part, 'data'):
-                                        parts.append(f"[Data: {json.dumps(root_part.data)}]")
+                                        parts.append(f"[Data: {json.dumps(root_part.data, ensure_ascii=False)}]")
                                     elif hasattr(root_part, 'file') and hasattr(root_part.file, 'name'):
                                         parts.append(f"[File: {root_part.file.name}]")
                                     else:

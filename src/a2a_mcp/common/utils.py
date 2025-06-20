@@ -1,6 +1,7 @@
 # type: ignore
 import logging
 import os
+from typing import Dict, List
 
 import google.generativeai as genai
 
@@ -83,3 +84,15 @@ def get_message_data(message: Message, delimiter: str = '\n') -> str:
         A single string containing all data content, or an empty string if no data parts are found.
     """
     return delimiter.join(get_data_parts(message.parts))
+
+
+def artifact_dict_to_parts(artifact_dict: Dict[str, Any]) -> List[Part]:
+    """Convert artifact dictionary to list of parts.
+    
+    Args:
+        artifact_dict: Dictionary containing artifact data
+        
+    Returns:
+        List[Part]: List of parts for the artifact, converted to TextParts
+    """
+    return [Part(root=TextPart(text=json.dumps(artifact_dict, indent=2, ensure_ascii=False)))]

@@ -4,6 +4,7 @@ import logging
 from typing import Dict, Any, Optional, List, Union
 from a2a_mcp.common.base_agent.base_agent import ToolCall, ToolOutput
 from pydantic import BaseModel, Field
+import copy
 
 class ManageTask(Task):
     tool_calls: Optional[List[ToolCall]]
@@ -114,6 +115,11 @@ class MemoryManagement(InMemoryTaskStore):
         """Get the number of tasks in a specific context."""
         return len(self.contexts.get(context_id, {}))
     
-    def get_all_context_tasks(self) -> Dict[str, Dict[str, Task]]:
-        """Get all context tasks."""
-        return self.contexts.copy()
+    async def get_all_context_tasks(self) -> Dict[str, Dict[str, ManageTask]]:
+        """
+        Get a deep copy of all context tasks, This method is thread safe and returns a deep-copy
+        This method is good enough to push to external databases
+        Any changes here will not affect task store
+        """
+        async with self.lock:
+            return copy.deepcopy(self.contexts)

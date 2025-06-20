@@ -6,7 +6,8 @@ from typing import AsyncGenerator, List
 from uuid import uuid4
 from a2a.server.tasks import TaskUpdater
 from a2a.types import Message, MessageSendParams, Part, TextPart, Role, TaskState
-from a2a.utils import new_agent_text_message, DataPart
+from a2a.utils import new_agent_text_message
+from a2a.types import DataPart
 from a2a_mcp.common.base_agent.base_agent import ResponseFormat, BaseAgent, MessageSendParams
 import json 
 
@@ -71,10 +72,19 @@ class TaskDelegator():
                         )
                         self.task_updater.update_status(TaskState.working, message)
                     elif event.get("type") == "TaskArtifactUpdateEvent":
-                        # Add artifact to task
                         artifact = event.get("artifact")
                         if artifact:
-                            self.task_updater.add_artifact(artifact)
+                            # Ensure proper type conversion
+                            if isinstance(artifact, dict):
+                                parts = artifact.get('parts', [])
+                                self.task_updater.add_artifact(
+                                    parts=parts,
+                                    # additional fields eg id, metadata etc can be added
+                                )
+                            elif hasattr(artifact, 'parts'):
+                                self.task_updater.add_artifact(
+                                    parts=artifact.parts,
+                                )
                     elif event.get("type") == "error":
                         # Handle error events
                         error_message = new_agent_text_message(

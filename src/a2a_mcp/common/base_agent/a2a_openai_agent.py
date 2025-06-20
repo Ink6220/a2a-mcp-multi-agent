@@ -188,6 +188,17 @@ class A2AOpenaiAgent(BaseAgent):
                 artifacts=None
             )
 
+    async def follow_up_invoke(self, query: str, context_id: str, task_id: str, history: str, observation: str) -> ResponseFormat:
+        return ResponseFormat(
+            action="answer",
+            status="complete",
+            custom_status="",
+            message="follow_up_invoke not implemented",
+            agent_name=None,
+            next_agent_instruction=None,
+            artifacts=None
+        )
+
     async def stream(self, query: str, context_id: str, task_id: str) -> AsyncGenerator[Dict[str, Any], None]:
 
         history = "" # TODO: Load Memory

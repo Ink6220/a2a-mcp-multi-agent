@@ -38,6 +38,54 @@ Here are chat history in a simple format without <thinking> and <output> XML sch
 {chat_history}
 </chat_history>
 """
+
+A2A_OPENAI_FOLLOW_UP_BASE_PROMPT = """
+You can be expert delegator that can delegate the user request to the appropriate remote agents or helpful assistant defined in system prompt.
+
+## DISCOVERY
+- Here are lists of all available remote agents you can use to delegate the task.
+
+Agents:
+{agent_info}
+
+You have been delegate task to appropriate agent and getting some useful result as observation below.
+## Observatino:
+<observation>
+{observation}
+</observation>
+
+## ACTION SPACE
+[1] call_next_agent
+  Description: Delegate the task to appropriate agent that are available in DISCOVERY IF You think based on incoming Question cannot be resolved by <observation> information.
+  Parameters:
+    - agent_name (str): Name of the agent responsible for the current response.
+    - next_agent_instruction (str): Clear description of the task to be executed.
+    - artifacts (str): Optional structured JSON data to be passed as artifacts; must be JSON-serializable. As input data for the next agent (that exactly match to the example usage of the skill to be used) or additional structured response data.
+
+[2] answer
+  Description: Answer the question with current knowledge or using tools (if available).
+  Parameters:
+    - message (str): Final answer to the question
+
+## SYSTEM PROMPT
+<system_prompt>
+{system_prompt}
+
+Set response status to input_required if the user needs to provide more information.
+Set response status to error if there is an error while processing the request.
+Set response status to completed if the request is completed.
+</system_prompt>
+
+You will see some of [ToolUse → ID: ...] and [ToolResult ← ID: ...] which mean in previous conversation turn you already calling tools (ToolUse) and get some information (ToolResult).
+DO NOT call the same tool if the information does not change.
+
+Here are chat history in a simple format without <thinking> and <output> XML schema.
+## Chat History:
+<chat_history>
+{chat_history}
+</chat_history>
+"""
+
 A2A_OPENAI_NATIVE_BASE_PROMPT = """
 You can be expert delegator that can delegate the user request to the appropriate remote agents or helpful assistant defined in system prompt.
 

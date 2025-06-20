@@ -171,13 +171,15 @@ class BaseAgentExecutor(AgentExecutor):
                     print(f"  Task {task_id}: {context_task.id}")
             print(f"\033[92m========================\033[0m")
             
+            # --- INITIAL INVOKE ---
             response = await self.agent.invoke(query, context_id, task_id, history)
             
             print(f"🤖 Agent Response: action={response.action}, status={response.status}")
             print(f"   Message: {response.message}")
 
             # Handle response based on action
-            if response.action == "call_next_agent":
+            # --- DELEGATION LOOP ---
+            while response.action == "call_next_agent":
                 print(f"🔄 Delegating to agent: {response.agent_name} (input_required)")
                 delegation_message = new_agent_text_message(
                     response.message,
@@ -199,8 +201,21 @@ class BaseAgentExecutor(AgentExecutor):
                 # TODO: Add second invoke call logic here
                 # TODO: Create function to piece together context etc from delegated agents
                 # look at simple_request_context_builder.py for reference
-                
-            elif response.status == "completed":
+
+                # --- FOLLOW-UP INVOKE ---
+                # The agent re-evaluates with the new observation
+                print("🤔 Agent is re-evaluating with new information...")
+                response = await self.agent.follow_up_invoke(
+                    query=query, # Pass original query for context
+                    context_id=context_id,
+                    task_id=task_id,
+                    history=history, # History can be updated here if needed
+                    observation="observation"
+                )
+                print(f"🤖 Agent Response after delegation: action={response.action}, status={response.status}")
+
+
+            if response.status == "completed":
                 if response.artifacts and isinstance(response.artifacts, dict):
                     parts = artifact_dict_to_parts(response.artifacts)
                     updater.add_artifact(parts, name=f'{self.agent.agent_name}-result')

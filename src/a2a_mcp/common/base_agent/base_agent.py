@@ -121,6 +121,11 @@ class BaseAgent(ABC):
         pass
 
     @abstractmethod
+    async def follow_up_invoke(self, query: str, context_id: str, task_id: str, history: str, observation: str) -> ResponseFormat:
+        """Follow up Invoke the agent after delegated task have been done, to decide to `call_next_agent` or `answer` based on observation: str and return a single response."""
+        pass
+
+    @abstractmethod
     async def stream(self, query: str, context_id: str, task_id: str) -> AsyncGenerator[Dict[str, Any], None]:
         """Stream responses from the agent. Must yield dictionaries with standardized format."""
         pass

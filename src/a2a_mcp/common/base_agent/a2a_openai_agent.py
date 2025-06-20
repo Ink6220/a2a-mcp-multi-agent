@@ -1,4 +1,4 @@
-from a2a_mcp.common.base_agent.base_agent import BaseAgent, ResponseFormat, Usage, ExtraUsage
+from a2a_mcp.common.base_agent.base_agent import BaseAgent, ResponseFormat, Usage, ExtraUsage, ToolCall, ToolOutput
 from a2a_mcp.common.prompts import A2A_OPENAI_BASE_PROMPT
 from agents import Agent, ModelSettings, Runner, ItemHelpers
 from openai.types.responses import ResponseTextDeltaEvent
@@ -32,20 +32,21 @@ from colorama import Fore, Style, init
 from pydantic import ValidationError
 import httpx
 from uuid import uuid4
-
+from a2a_mcp.common.memory_management import MemoryManagement,ManageTask as Task
 class A2AOpenaiAgent(BaseAgent):
     def __init__(self, agent_card: CustomAgentCard, card_discovery: A2ACardDiscovery, mcp_server: list=[]):
         super().__init__(agent_card.modelName, agent_card, card_discovery)  # Call BaseAgent's __init__
 
         self.mcp_server = mcp_server
         self.agent = None
+        self.context_stores = {}
 
         # TODO: Still need memory manager here?
         print("=============== Using Openai ===============")
 
     def get_agent(self, history, agent_info):
         instruction = self.root_instruction(chat_history=history, agent_info=agent_info)
-        print(instruction)
+        # print(instruction)
         return instruction, Agent(
             name=self.agent_card.name,
             instructions=instruction,
@@ -115,30 +116,50 @@ class A2AOpenaiAgent(BaseAgent):
         usage_id = str(uuid4())
         result = None
         try:
-            # history = "" # TODO: Load Memory
+            history = self.postprocess(context)
+            
+            #Generate agent result
             agent_info = self.card_discovery.get_remote_agent_info()
             instruction, self.agent = self.get_agent(history, agent_info)
             print(Fore.GREEN + Style.BRIGHT + "Init agent complete" + Style.RESET_ALL)
             start_time = time.time()
             result = await Runner.run(self.agent, query)
             print(Fore.GREEN + Style.BRIGHT + "[Runner.run]:" + Style.RESET_ALL, time.time() - start_time)
-            print(Fore.GREEN + Style.BRIGHT, result.final_output, Style.RESET_ALL)
-            api_usage = result.raw_responses[0].usage
-            # TODO: Shold we save conversation history here ? 
-        
-            usage = Usage(
-                usage_id=usage_id,
-                context_id=context_id,
-                task_id=task_id,
-                model_name=self.model_name,
-                user_input=query,
-                output=result.final_output,
-                prompt_tokens=api_usage.input_tokens,
-                completion_tokens=api_usage.output_tokens,
-                extra_usage=ExtraUsage(reasoning_tokens=api_usage.input_tokens_details.cached_tokens, cache_tokens=api_usage.output_tokens_details.reasoning_tokens)
-            )
-            self.record_usage(usage)
-
+            print(result.raw_responses[0].usage)
+            print(result.final_output)
+            api_usage = result.raw_responses[0].usage            #Get tool calls and outputs and save to context store
+            tool_calls, tool_outputs = self._extract_tool_calls_and_outputs(result)
+            
+            # Save tool calls and outputs to current task in context
+            if tool_calls or tool_outputs:
+                # Find current task in context and update it with tools
+                if task_id in context:
+                    current_task = context[task_id]
+                    # Create ManageTask with tools if it's not already
+                    if hasattr(current_task, 'tool_calls') and hasattr(current_task, 'tool_outputs'):
+                        current_task.tool_calls = tool_calls if tool_calls else None
+                        current_task.tool_outputs = tool_outputs if tool_outputs else None
+                        print(f"{Fore.BLUE}Updated task {task_id} with {len(tool_calls)} tool calls and {len(tool_outputs)} tool outputs{Style.RESET_ALL}")
+                    else:
+                        # Convert regular Task to ManageTask if needed
+                        from a2a_mcp.common.memory_management import ManageTask
+                        manage_task = ManageTask.from_task(current_task)
+                        manage_task.tool_calls = tool_calls if tool_calls else None
+                        manage_task.tool_outputs = tool_outputs if tool_outputs else None
+                        context[task_id] = manage_task
+                        print(f"{Fore.BLUE}Converted and updated task {task_id} with tools{Style.RESET_ALL}")
+            
+            # สร้างและเก็บ Usage
+            self._create_and_store_usage(
+                    usage_id=usage_id,
+                    context_id=context_id,
+                    task_id=task_id,
+                    query=query,
+                    result=result,
+                    api_usage=api_usage,
+                    tool_calls=tool_calls,
+                    tool_outputs=tool_outputs            
+                )
             # Convert result to ResponseFormat
             try:
                 return result.final_output
@@ -302,6 +323,57 @@ class A2AOpenaiAgent(BaseAgent):
                 "agent_name": ""
             }
 
+    def postprocess(self, context: Dict[str, Task]) -> str:
+        lines = []
+        for task_id, task in context.items():
+            lines.append(f"=== Task {task.id} ===")
+            
+            # แสดง history ถ้ามี
+            if task.history:
+                for message in task.history:
+                    if hasattr(message, 'kind') and message.kind == 'message':
+                        if message.parts:
+                            parts = []
+                            for part in message.parts:
+                                if hasattr(part, 'root'):
+                                    root_part = part.root
+                                    if hasattr(root_part, 'text'):
+                                        parts.append(root_part.text)
+                                    elif hasattr(root_part, 'data'):
+                                        parts.append(f"[Data: {json.dumps(root_part.data)}]")
+                                    elif hasattr(root_part, 'file') and hasattr(root_part.file, 'name'):
+                                        parts.append(f"[File: {root_part.file.name}]")
+                                    else:
+                                        parts.append(str(root_part))
+                                else:
+                                    if hasattr(part, 'text'):
+                                        parts.append(part.text)
+                                    else:
+                                        parts.append(str(part))
+                            if parts:
+                                lines.append(f"{message.role}: {' '.join(parts)}")
+            
+            # แสดง tool calls และ outputs ถ้ามี
+            if hasattr(task, 'tool_calls') and task.tool_calls:
+                lines.append("--- Tool Calls ---")
+                for i, tool_call in enumerate(task.tool_calls):
+                    lines.append(f"Tool {i+1} - Name: {tool_call.tool_name}")
+                    lines.append(f"Arguments: {json.dumps(tool_call.arguments, ensure_ascii=False)}")
+            
+            if hasattr(task, 'tool_outputs') and task.tool_outputs:
+                lines.append("--- Tool Outputs ---")
+                for i, tool_output in enumerate(task.tool_outputs):
+                    lines.append(f"Tool {i+1} Output: {tool_output.output}")
+            
+            lines.append("")
+        
+        result = "\n".join(lines)
+        print(f"\n{Fore.CYAN}=== POSTPROCESS RESULT ==={Style.RESET_ALL}")
+        print(result)
+        print(f"{Fore.CYAN}=========================={Style.RESET_ALL}\n")
+        
+        return result
+    
     def _extract_message_content(self, chunk):
         """Helper method to extract relevant message content from a chunk"""
         # Skip JSON structural tokens
@@ -402,3 +474,129 @@ class A2AOpenaiAgent(BaseAgent):
     def root_instruction(self, chat_history: str, tools: Any = None, agent_info: Any = None) -> str:
         prompt = self.agent_card.systemPrompt or "You are a helpful assistant."
         return A2A_OPENAI_BASE_PROMPT.format(system_prompt=prompt, chat_history=chat_history, agent_info=agent_info)
+
+    def _extract_tool_calls_and_outputs(self, result) -> tuple[list[ToolCall], list[ToolOutput]]:
+        """แยกข้อมูล tool calls และ tool outputs จาก result"""
+        tool_calls = []
+        tool_outputs = []
+        
+        # Debug: แสดง RunItems ที่เกิดขึ้น
+        print(f"\n{Fore.YELLOW}=== DEBUG: RunItems Analysis ==={Style.RESET_ALL}")
+        if hasattr(result, 'new_items') and result.new_items:
+            print(f"Total new_items: {len(result.new_items)}")
+            for i, item in enumerate(result.new_items):
+                print(f"[{i}] Item type: {item.type}")
+                if hasattr(item, 'raw_item'):
+                    print(f"    Raw item type: {type(item.raw_item)}")
+                    if hasattr(item.raw_item, '__dict__'):
+                        print(f"    Raw item attributes: {list(item.raw_item.__dict__.keys())}")
+                    elif isinstance(item.raw_item, dict):
+                        print(f"    Raw item keys: {list(item.raw_item.keys())}")
+        else:
+            print("No new_items found or new_items is empty")
+        print(f"{Fore.YELLOW}================================{Style.RESET_ALL}\n")
+        
+        # วนลูปผ่าน new_items เพื่อเก็บข้อมูล tool calls และ outputs
+        if hasattr(result, 'new_items') and result.new_items:
+            for item in result.new_items:
+                print(f"Processing item type: {item.type}")
+                
+                if item.type == "tool_call_item":
+                    tool_call = self._extract_tool_call(item)
+                    if tool_call:
+                        tool_calls.append(tool_call)
+                
+                elif item.type == "tool_call_output_item":
+                    tool_output = self._extract_tool_output(item)
+                    if tool_output:
+                        tool_outputs.append(tool_output)
+        
+        print(f"\n{Fore.GREEN}Collected {len(tool_calls)} tool calls and {len(tool_outputs)} tool outputs{Style.RESET_ALL}")
+        return tool_calls, tool_outputs
+
+    def _extract_tool_call(self, item) -> ToolCall:
+        """แยกข้อมูล tool call จาก ToolCallItem"""
+        print("  -> Found tool_call_item")
+        tool_name = 'unknown'
+        arguments = {}
+        
+        # สำหรับ ResponseFunctionToolCall
+        if hasattr(item.raw_item, 'function'):
+            if hasattr(item.raw_item.function, 'name'):
+                tool_name = item.raw_item.function.name
+            if hasattr(item.raw_item.function, 'arguments'):
+                try:
+                    arguments = json.loads(item.raw_item.function.arguments) if isinstance(item.raw_item.function.arguments, str) else item.raw_item.function.arguments or {}
+                except (json.JSONDecodeError, TypeError):
+                    arguments = {"raw_arguments": str(item.raw_item.function.arguments)}
+        
+        # สำหรับ tool calls อื่นๆ ที่อาจมี name และ arguments โดยตรง
+        elif hasattr(item.raw_item, 'name'):
+            tool_name = item.raw_item.name
+            if hasattr(item.raw_item, 'arguments'):
+                try:
+                    arguments = json.loads(item.raw_item.arguments) if isinstance(item.raw_item.arguments, str) else item.raw_item.arguments or {}
+                except (json.JSONDecodeError, TypeError):
+                    arguments = {"raw_arguments": str(item.raw_item.arguments)}
+        
+        print(f"     Tool name: {tool_name}")
+        print(f"     Arguments: {arguments}")
+        
+        return ToolCall(tool_name=tool_name, arguments=arguments)
+
+    def _extract_tool_output(self, item) -> ToolOutput:
+        """แยกข้อมูล tool output จาก ToolCallOutputItem"""
+        print("  -> Found tool_call_output_item")
+        output_str = ""
+        
+        # ตาม RunItem structure, ToolCallOutputItem มี output attribute
+        if hasattr(item, 'output') and item.output:
+            output_str = str(item.output)
+        # และมี raw_item ที่เป็น dict มี output key
+        elif hasattr(item.raw_item, 'output'):
+            raw_output = item.raw_item['output'] if isinstance(item.raw_item, dict) else item.raw_item.output
+            output_str = str(raw_output)
+        
+        print(f"     Output: {output_str[:100]}...")
+        return ToolOutput(output=output_str)
+
+    def _create_and_store_usage(self, usage_id: str, context_id: str, task_id: str, 
+                               query: str, result, api_usage, tool_calls: list[ToolCall], 
+                               tool_outputs: list[ToolOutput]) -> Usage:
+        """สร้างและเก็บ Usage object"""
+        usage = Usage(
+            usage_id=usage_id,
+            context_id=context_id,
+            task_id=task_id,
+            model_name=self.model_name,
+            user_input=query,
+            output=result.final_output,
+            prompt_tokens=api_usage.input_tokens,
+            completion_tokens=api_usage.output_tokens,
+            extra_usage=ExtraUsage(
+                reasoning_tokens=api_usage.input_tokens_details.cached_tokens, 
+                cache_tokens=api_usage.output_tokens_details.reasoning_tokens
+            ),
+            tool_calls=tool_calls if tool_calls else None,
+            tool_outputs=tool_outputs if tool_outputs else None        )
+        
+        self.record_usage(usage)
+        
+        # Print usage details
+        print(f"\n{Fore.MAGENTA}=== USAGE DETAILS ==={Style.RESET_ALL}")
+        print(f"Usage ID: {usage.usage_id}")
+        print(f"Context ID: {usage.context_id}")
+        print(f"Task ID: {usage.task_id}")
+        print(f"Model: {usage.model_name}")
+        print(f"Prompt Tokens: {usage.prompt_tokens}")
+        print(f"Completion Tokens: {usage.completion_tokens}")
+        if usage.extra_usage:
+            print(f"Reasoning Tokens: {usage.extra_usage.reasoning_tokens}")
+            print(f"Cache Tokens: {usage.extra_usage.cache_tokens}")
+        if usage.tool_calls:
+            print(f"Tool Calls: {len(usage.tool_calls)}")
+            for i, tool_call in enumerate(usage.tool_calls):
+                print(f"  [{i+1}] {tool_call.tool_name}: {tool_call.arguments}")
+        if usage.tool_outputs:
+            print(f"Tool Outputs: {len(usage.tool_outputs)}")
+        print(f"{Fore.MAGENTA}==================={Style.RESET_ALL}\n")

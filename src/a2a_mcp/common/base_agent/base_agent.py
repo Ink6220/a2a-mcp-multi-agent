@@ -70,6 +70,13 @@ class ExtraUsage(BaseModel):
     reasoning_tokens: int
     cache_tokens: int
 
+class ToolCall(BaseModel):
+    tool_name: str
+    arguments: Dict[str, Any]
+
+class ToolOutput(BaseModel):
+    output: str
+
 class Usage(BaseModel):
     usage_id: str
     context_id: str
@@ -80,6 +87,8 @@ class Usage(BaseModel):
     prompt_tokens: int
     completion_tokens: int
     extra_usage: Optional[ExtraUsage] = None
+    tool_calls: Optional[List[ToolCall]] = None
+    tool_outputs: Optional[List[ToolOutput]] = None
     timestamp: str = Field(default_factory=current_time_utc7_str)
 
 class BaseAgent(ABC):

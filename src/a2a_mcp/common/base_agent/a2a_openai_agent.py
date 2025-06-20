@@ -32,7 +32,7 @@ from colorama import Fore, Style, init
 from pydantic import ValidationError
 import httpx
 from uuid import uuid4
-from a2a_mcp.common.memory_management import MemoryManagement,ManageTask as Task
+from a2a_mcp.common.memory_management import MemoryManagement,ManageTask
 class A2AOpenaiAgent(BaseAgent):
     def __init__(self, agent_card: CustomAgentCard, card_discovery: A2ACardDiscovery, mcp_server: list=[]):
         super().__init__(agent_card.modelName, agent_card, card_discovery)  # Call BaseAgent's __init__
@@ -111,7 +111,7 @@ class A2AOpenaiAgent(BaseAgent):
         
         return _stream_connection()
 
-    async def invoke(self, query: str, context_id: str, task_id: str, history: str) -> ResponseFormat:
+    async def invoke(self, query: str, context_id: str, task_id: str, context: Dict[str, ManageTask]) -> ResponseFormat:
         # TODO: maybe we should go through together on invoke(), if we are going to change response format etc (im not too clear on this)
         usage_id = str(uuid4())
         result = None
@@ -127,7 +127,8 @@ class A2AOpenaiAgent(BaseAgent):
             print(Fore.GREEN + Style.BRIGHT + "[Runner.run]:" + Style.RESET_ALL, time.time() - start_time)
             print(result.raw_responses[0].usage)
             print(result.final_output)
-            api_usage = result.raw_responses[0].usage            #Get tool calls and outputs and save to context store
+            api_usage = result.raw_responses[0].usage
+            #Get tool calls and outputs and save to context store
             tool_calls, tool_outputs = self._extract_tool_calls_and_outputs(result)
             
             # Save tool calls and outputs to current task in context
@@ -312,8 +313,7 @@ class A2AOpenaiAgent(BaseAgent):
                     "call_next_agent": True,
                     "agent_name": agent_name
                 }
-            else:
-                yield {
+            else:                yield {
                     "is_task_complete": True,
                     "require_user_input": require_input,
                     "content": parsed_response['message'],
@@ -334,48 +334,82 @@ class A2AOpenaiAgent(BaseAgent):
                 "agent_name": ""
             }
 
-    def postprocess(self, context: Dict[str, Task]) -> str:
+    #TODO: Someone should refactor performance of this function, it is a bit messy
+    def postprocess(self, context: Dict[str, ManageTask]) -> str:
         lines = []
         for task_id, task in context.items():
             lines.append(f"=== Task {task.id} ===")
-            
-            # แสดง history ถ้ามี
+            # Log the full task structure for debugging
+            print(f"\n{Fore.YELLOW}DEBUG: Task {task.id} structure:{Style.RESET_ALL}")
+            print(f"  - History count: {len(task.history) if task.history else 0}")
+            print(f"  - Tool calls count: {len(task.tool_calls) if hasattr(task, 'tool_calls') and task.tool_calls else 0}")
+            print(f"  - Tool outputs count: {len(task.tool_outputs) if hasattr(task, 'tool_outputs') and task.tool_outputs else 0}")
             if task.history:
-                for message in task.history:
+                for i, message in enumerate(task.history):
+                    print(f"  DEBUG: Processing message {i}: type={type(message)}, kind={getattr(message, 'kind', 'N/A')}")
+                    # Handle different types of messages
                     if hasattr(message, 'kind') and message.kind == 'message':
-                        if message.parts:
+                        role = getattr(message, 'role', 'unknown')
+                        role_str = role.value if hasattr(role, 'value') else str(role)
+                        
+                        if hasattr(message, 'parts') and message.parts:
                             parts = []
                             for part in message.parts:
+                                # Part is a RootModel, access the actual content via .root
                                 if hasattr(part, 'root'):
-                                    root_part = part.root
-                                    if hasattr(root_part, 'text'):
-                                        parts.append(root_part.text)
-                                    elif hasattr(root_part, 'data'):
-                                        parts.append(f"[Data: {json.dumps(root_part.data)}]")
-                                    elif hasattr(root_part, 'file') and hasattr(root_part.file, 'name'):
-                                        parts.append(f"[File: {root_part.file.name}]")
+                                    actual_part = part.root
+                                    if hasattr(actual_part, 'text'):
+                                        parts.append(actual_part.text)
+                                    elif hasattr(actual_part, 'data'):
+                                        parts.append(f"[Data: {json.dumps(actual_part.data)}]")
+                                    elif hasattr(actual_part, 'file'):
+                                        file_name = getattr(actual_part.file, 'name', 'unknown')
+                                        parts.append(f"[File: {file_name}]")
                                     else:
-                                        parts.append(str(root_part))
+                                        parts.append(str(actual_part))
                                 else:
+                                    # Fallback if part doesn't have root
                                     if hasattr(part, 'text'):
                                         parts.append(part.text)
                                     else:
                                         parts.append(str(part))
+                            
                             if parts:
-                                lines.append(f"{message.role}: {' '.join(parts)}")
+                                lines.append(f"{role_str}: {' '.join(parts)}")
+                        else:
+                            content = getattr(message, 'content', str(message))
+                            lines.append(f"{role_str}: {content}")
+                
+                if hasattr(task, 'artifacts') and task.artifacts:
+                    print(f"  DEBUG: Found {len(task.artifacts)} artifacts")
+                    for artifact in task.artifacts:
+                        if hasattr(artifact, 'parts') and artifact.parts:
+                            agent_parts = []
+                            for part in artifact.parts:
+                                if hasattr(part, 'root'):
+                                    actual_part = part.root
+                                    if hasattr(actual_part, 'text'):
+                                        agent_parts.append(actual_part.text)
+                                    else:
+                                        agent_parts.append(str(actual_part))
+                                else:
+                                    if hasattr(part, 'text'):
+                                        agent_parts.append(part.text)
+                                    else:
+                                        agent_parts.append(str(part))
+                            
+                            if agent_parts:
+                                lines.append(f"agent: {' '.join(agent_parts)}")
             
             # แสดง tool calls และ outputs ถ้ามี
             if hasattr(task, 'tool_calls') and task.tool_calls:
-                lines.append("--- Tool Calls ---")
                 for i, tool_call in enumerate(task.tool_calls):
-                    lines.append(f"Tool {i+1} - Name: {tool_call.tool_name}")
-                    lines.append(f"Arguments: {json.dumps(tool_call.arguments, ensure_ascii=False)}")
+                    lines.append(f"Tool Call {i+1} - Name: {tool_call.tool_name}, Arguments: {json.dumps(tool_call.arguments, ensure_ascii=False)}")
             
             if hasattr(task, 'tool_outputs') and task.tool_outputs:
-                lines.append("--- Tool Outputs ---")
                 for i, tool_output in enumerate(task.tool_outputs):
-                    lines.append(f"Tool {i+1} Output: {tool_output.output}")
-            
+                    lines.append(f"Tool Result {i+1} - Output: {tool_output.output}")
+
             lines.append("")
         
         result = "\n".join(lines)

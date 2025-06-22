@@ -25,7 +25,7 @@ from a2a.utils.errors import ServerError
 from a2a_mcp.common.task_delegator import TaskDelegator
 from a2a_mcp.common.base_agent.base_agent import BaseAgent, ResponseFormat
 from a2a_mcp.common.memory_management import MemoryManagement, ManageTask
-from a2a_mcp.common.utils import artifact_dict_to_parts
+from a2a_mcp.common.utils import artifact_dict_to_parts, get_message_data
 import logging
 import json
 import asyncio
@@ -88,7 +88,8 @@ class BaseAgentExecutor(AgentExecutor):
         print(f"🚀 Executing A2A-compliant agent: {self.agent.agent_name}")
         
         query = context.get_user_input()
-        print(f"📝 User Query: {query}")
+        incoming_data = get_message_data(context.message)
+        print(f"📝 User Query: {query+"\n"+incoming_data}")
         
         message = cast(Message, context.message)  # Safe cast after validation
         task = context.current_task or new_task(message)
@@ -137,6 +138,7 @@ class BaseAgentExecutor(AgentExecutor):
             # --- DELEGATION LOOP ---
             while response.action == "call_next_agent":
                 print(f"🔄 Delegating to agent: {response.agent_name} (input_required)")
+                all_observation = ""
                 delegation_message = new_agent_text_message(
                     response.message,
                     task.contextId,
@@ -149,10 +151,12 @@ class BaseAgentExecutor(AgentExecutor):
                     self.ongoing_tasks.append(stream)
                 
                 # Use TaskDelegator's stream management
-                delegation_complete = await self.delegator.manage_streams(
+                delegation_complete, observation = await self.delegator.manage_streams(
                     self.ongoing_tasks,
                     response.agent_name or "unknown_agent"
                 )
+                all_observation += observation
+                print(f"📝 Observation from {response.agent_name}: {observation}")
 
                 # TODO: Add second invoke call logic here
                 # TODO: Create function to piece together context etc from delegated agents
@@ -165,8 +169,8 @@ class BaseAgentExecutor(AgentExecutor):
                     query=query, # Pass original query for context
                     context_id=context_id,
                     task_id=task_id,
-                    history=history, # History can be updated here if needed
-                    observation="observation"
+                    context=context_tasks,
+                    observation=all_observation
                 )
                 print(f"🤖 Agent Response after delegation: action={response.action}, status={response.status}")
 

@@ -1,5 +1,5 @@
 from a2a_mcp.common.base_agent.base_agent import BaseAgent, ResponseFormat, Usage, ExtraUsage, ToolCall, ToolOutput
-from a2a_mcp.common.prompts import A2A_OPENAI_BASE_PROMPT
+from a2a_mcp.common.prompts import A2A_OPENAI_BASE_PROMPT, A2A_OPENAI_FOLLOW_UP_BASE_PROMPT
 from agents import Agent, ModelSettings, Runner, ItemHelpers
 from openai.types.responses import ResponseTextDeltaEvent
 from openai import AsyncOpenAI, OpenAIError
@@ -47,6 +47,19 @@ class A2AOpenaiAgent(BaseAgent):
     def get_agent(self, history, agent_info):
         instruction = self.root_instruction(chat_history=history, agent_info=agent_info)
         # print(instruction)
+        return instruction, Agent(
+            name=self.agent_card.name,
+            instructions=instruction,
+            model=self.model_name,
+            mcp_servers=self.mcp_server,
+            output_type=ResponseFormat,
+            model_settings=ModelSettings(temperature=0.0),
+            
+        )
+    
+    def get_follow_up_agent(self, history: str, agent_info: str, observation: str):
+        instruction = self.root_follow_up_instruction(chat_history=history, agent_info=agent_info, observation=observation)
+        print(f"{Fore.BLUE}{instruction}{Style.RESET_ALL}")
         return instruction, Agent(
             name=self.agent_card.name,
             instructions=instruction,
@@ -189,16 +202,82 @@ class A2AOpenaiAgent(BaseAgent):
                 artifacts=None
             )
 
-    async def follow_up_invoke(self, query: str, context_id: str, task_id: str, history: str, observation: str) -> ResponseFormat:
-        return ResponseFormat(
-            action="answer",
-            status="complete",
-            custom_status="",
-            message="follow_up_invoke not implemented",
-            agent_name=None,
-            next_agent_instruction=None,
-            artifacts=None
-        )
+    async def follow_up_invoke(self, query: str, context_id: str, task_id: str, context: Dict[str, ManageTask], observation: str) -> ResponseFormat:
+        usage_id = str(uuid4())
+        result = None
+        try:
+            history = self.postprocess(context)
+            
+            #Generate agent result
+            agent_info = self.card_discovery.get_remote_agent_info()
+            instruction, self.agent = self.get_follow_up_agent(history, agent_info, observation)
+            print(Fore.GREEN + Style.BRIGHT + "Init agent complete" + Style.RESET_ALL)
+            start_time = time.time()
+            result = await Runner.run(self.agent, query)
+            print(Fore.GREEN + Style.BRIGHT + "[Runner.run]:" + Style.RESET_ALL, time.time() - start_time)
+            print(result.raw_responses[0].usage)
+            print(result.final_output)
+            api_usage = result.raw_responses[0].usage
+            #Get tool calls and outputs and save to context store
+            tool_calls, tool_outputs = self._extract_tool_calls_and_outputs(result)
+            
+            # Save tool calls and outputs to current task in context
+            if tool_calls or tool_outputs:
+                # Find current task in context and update it with tools
+                if task_id in context:
+                    current_task = context[task_id]
+                    # Create ManageTask with tools if it's not already
+                    if hasattr(current_task, 'tool_calls') and hasattr(current_task, 'tool_outputs'):
+                        current_task.tool_calls = tool_calls if tool_calls else None
+                        current_task.tool_outputs = tool_outputs if tool_outputs else None
+                        print(f"{Fore.BLUE}Updated task {task_id} with {len(tool_calls)} tool calls and {len(tool_outputs)} tool outputs{Style.RESET_ALL}")
+                    else:
+                        # Convert regular Task to ManageTask if needed
+                        from a2a_mcp.common.memory_management import ManageTask
+                        manage_task = ManageTask.from_task(current_task)
+                        manage_task.tool_calls = tool_calls if tool_calls else None
+                        manage_task.tool_outputs = tool_outputs if tool_outputs else None
+                        context[task_id] = manage_task
+                        print(f"{Fore.BLUE}Converted and updated task {task_id} with tools{Style.RESET_ALL}")
+            
+            # สร้างและเก็บ Usage
+            self._create_and_store_usage(
+                    usage_id=usage_id,
+                    context_id=context_id,
+                    task_id=task_id,
+                    query=query,
+                    result=result,
+                    api_usage=api_usage,
+                    tool_calls=tool_calls,
+                    tool_outputs=tool_outputs            
+                )
+            # Convert result to ResponseFormat
+            try:
+                return result.final_output
+            except ValidationError as ve:
+                print("Validation error while formatting response:", ve)
+                return ResponseFormat(
+                    action="answer",
+                    status="failed",
+                    custom_status="",
+                    message="The response format was invalid.",
+                    agent_name=None,
+                    next_agent_instruction=None,
+                    artifacts=None
+                )
+
+        except OpenAIError as e:
+            traceback.print_exc()
+            print(e)
+            return ResponseFormat(
+                action="answer",
+                status="input_required",
+                custom_status="",
+                message="We are unable to process your request at the moment. Please try again.",
+                agent_name=None,
+                next_agent_instruction=None,
+                artifacts=None
+            )
 
     async def stream(self, query: str, context_id: str, task_id: str) -> AsyncGenerator[Dict[str, Any], None]:
 
@@ -519,6 +598,10 @@ class A2AOpenaiAgent(BaseAgent):
     def root_instruction(self, chat_history: str, tools: Any = None, agent_info: Any = None) -> str:
         prompt = self.agent_card.systemPrompt or "You are a helpful assistant."
         return A2A_OPENAI_BASE_PROMPT.format(system_prompt=prompt, chat_history=chat_history, agent_info=agent_info)
+
+    def root_follow_up_instruction(self, chat_history: str, tools: Any = None, agent_info: Any = None, observation: str = "") -> str:
+        prompt = self.agent_card.systemPrompt or "You are a helpful assistant."
+        return A2A_OPENAI_FOLLOW_UP_BASE_PROMPT.format(system_prompt=prompt, chat_history=chat_history, agent_info=agent_info, observation=observation)
 
     def _extract_tool_calls_and_outputs(self, result) -> tuple[list[ToolCall], list[ToolOutput]]:
         """แยกข้อมูล tool calls และ tool outputs จาก result"""

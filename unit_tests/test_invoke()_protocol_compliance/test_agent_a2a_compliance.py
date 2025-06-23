@@ -28,12 +28,13 @@ class ExampleCompliantAgent:
     """Example agent that demonstrates proper A2A protocol compliance"""
     agent_name = "example-compliant-agent"
     
-    async def invoke(self, query: str, context_id: str, task_id: str, history: str) -> ResponseFormat:
+    async def invoke(self, query: str, context_id: str, task_id: str, context: Dict[str, Any]) -> ResponseFormat:
         """Example compliant invoke() implementation"""
         return ResponseFormat(
             action="answer",
             status="completed",
-            message="I have processed your request..."
+            message="I have processed your request...",
+            next_agent_instruction=None
         )
 
 class A2AComplianceTester:
@@ -144,7 +145,7 @@ class A2AComplianceTester:
                 query="Test query",
                 context_id="test-context",
                 task_id="test-task",
-                history=""
+                context={}
             )
             
             # Verify response is a Pydantic BaseModel

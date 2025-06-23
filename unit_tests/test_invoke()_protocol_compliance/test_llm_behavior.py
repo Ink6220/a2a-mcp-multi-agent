@@ -134,7 +134,7 @@ class LLMBehaviorTester:
                     query=scenario['query'],
                     context_id="test-context",
                     task_id="test-task",
-                    history=""
+                    context={}
                 )
                 
                 # Validate state and fields

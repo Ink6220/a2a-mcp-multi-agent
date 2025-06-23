@@ -81,7 +81,7 @@ class A2AOpenaiAgent(BaseAgent):
                         SendStreamingMessageRequest(id=str(uuid4()), params=request)
                     ):
                         if isinstance(response.root, JSONRPCErrorResponse):
-                            yield {"type": "error", "error": str(response.root)}
+                            yield {"kind": "error", "error": str(response.root)}
                             return
                         
                         if hasattr(response.root, 'result') and response.root.result:
@@ -90,9 +90,10 @@ class A2AOpenaiAgent(BaseAgent):
                             if hasattr(event, '__dict__'):
                                 yield event.__dict__
                             else:
-                                yield {"data": str(event)}
+                                # Fallback – treat as generic message event
+                                yield {"kind": "message", "content": str(event)}
                         else:
-                            yield {"type": "error", "error": "Empty response"}
+                            yield {"kind": "error", "error": "Empty response"}
                             return
                 else:
                     # Handle non-streaming agent
@@ -101,13 +102,13 @@ class A2AOpenaiAgent(BaseAgent):
                     )
                     
                     if isinstance(response.root, JSONRPCErrorResponse):
-                        yield {"type": "error", "error": str(response.root)}
+                        yield {"kind": "error", "error": str(response.root)}
                     else:
                         result = response.root.result
                         if hasattr(result, '__dict__'):
                             yield result.__dict__
                         else:
-                            yield {"data": str(result)}
+                            yield {"kind": "message", "content": str(result)}
         
         return _stream_connection()
 

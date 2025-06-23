@@ -28,6 +28,7 @@ class ResponseFormat(MockBaseModel):
     agent_name: Optional[str] = None
     next_agent_instruction: Optional[str] = None
     next_agent_schema: Optional[Dict[str, Any]] = None
+    artifacts: Optional[str] = None
 
 
 class MockAgent:
@@ -46,10 +47,14 @@ class MockAgent:
         """
         self.response_to_return = ResponseFormat(**response_data)
 
-    async def invoke(self, query: str, session_id: str) -> ResponseFormat:
-        """
-        Returns the pre-configured ResponseFormat object.
-        """
+    async def invoke(
+        self,
+        query: str,
+        context_id: str,
+        task_id: str | None = None,
+        context: Dict[str, Any] | None = None,
+    ) -> ResponseFormat:
+        """Return the pre-configured ResponseFormat regardless of inputs."""
         return self.response_to_return
 
 # --- Pre-configured Mock Agents for Different Scenarios ---
@@ -100,7 +105,13 @@ def get_failed_agent() -> MockAgent:
 def get_error_agent() -> MockAgent:
     """Returns a mock agent that raises an exception during invoke."""
     class ErrorAgent(MockAgent):
-        async def invoke(self, query: str, session_id: str) -> ResponseFormat:
+        async def invoke(
+            self,
+            query: str,
+            context_id: str,
+            task_id: str | None = None,
+            context: Dict[str, Any] | None = None,
+        ) -> ResponseFormat:
             raise ValueError("Simulated agent error")
     
     # The response data here is irrelevant since invoke will raise an error

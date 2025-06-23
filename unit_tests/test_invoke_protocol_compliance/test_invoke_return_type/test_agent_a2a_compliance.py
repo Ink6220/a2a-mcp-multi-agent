@@ -15,7 +15,7 @@ import sys
 import os
 
 # Add project root for imports
-sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
+sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', '..'))
 
 from src.a2a_mcp.common.base_agent.base_agent import ResponseFormat
 from pydantic import BaseModel, ValidationError

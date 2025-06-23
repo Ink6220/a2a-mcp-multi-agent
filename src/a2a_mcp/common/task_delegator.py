@@ -9,6 +9,7 @@ from a2a.types import Message, MessageSendParams, Part, TextPart, Role, TaskStat
 from a2a.utils import new_agent_text_message
 from a2a.types import DataPart
 from a2a_mcp.common.base_agent.base_agent import ResponseFormat, BaseAgent, MessageSendParams
+from a2a_mcp.common.utils import append_message_metadata
 import json 
 
 class TaskDelegator():
@@ -70,6 +71,7 @@ class TaskDelegator():
                             self.task_updater.context_id,
                             self.task_updater.task_id,
                         )
+                        message = append_message_metadata(message, {"agent_name": agent_name})
                         self.task_updater.update_status(TaskState.working, message)
                     elif event.get("kind") == "status-update":
                         if event.get('status') :
@@ -83,6 +85,7 @@ class TaskDelegator():
                                     self.task_updater.context_id,
                                     self.task_updater.task_id,
                                 )
+                                message = append_message_metadata(message, {"agent_name": agent_name})
                                 self.task_updater.update_status(TaskState.working, message)
                     elif event.get("kind") == "artifact-update":
                         artifact = event.get("artifact")
@@ -93,11 +96,13 @@ class TaskDelegator():
                                 parts = artifact.get('parts', [])
                                 self.task_updater.add_artifact(
                                     parts=parts,
+                                    metadata={"agent_name": agent_name}
                                     # additional fields eg id, metadata etc can be added
                                 )
                             elif hasattr(artifact, 'parts'):
                                 self.task_updater.add_artifact(
                                     parts=artifact.parts,
+                                    metadata={"agent_name": agent_name}
                                 )
                     elif event.get("kind") == "error":
                         # Handle error events
@@ -106,6 +111,7 @@ class TaskDelegator():
                             self.task_updater.context_id,
                             self.task_updater.task_id,
                         )
+                        error_message = append_message_metadata(error_message, {"agent_name": agent_name})
                         self.task_updater.update_status(TaskState.failed, error_message)
                     # Add more event types as needed
             except Exception as e:
@@ -115,6 +121,7 @@ class TaskDelegator():
                     self.task_updater.context_id,
                     self.task_updater.task_id,
                 )
+                error_message = append_message_metadata(error_message, {"agent_name": agent_name})
                 self.task_updater.update_status(TaskState.failed, error_message)
             finally:
                 streams_done[idx] = True

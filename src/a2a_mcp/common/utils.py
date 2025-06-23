@@ -96,3 +96,7 @@ def artifact_dict_to_parts(artifact_dict: Dict[str, Any]) -> List[Part]:
         List[Part]: List of parts for the artifact, converted to TextParts
     """
     return [Part(root=TextPart(text=json.dumps(artifact_dict, indent=2, ensure_ascii=False)))]
+
+def append_message_metadata(msg: Message, new_meta: dict[str, Any]) -> None:
+    msg.metadata = {**(msg.metadata or {}), **new_meta}
+    return msg

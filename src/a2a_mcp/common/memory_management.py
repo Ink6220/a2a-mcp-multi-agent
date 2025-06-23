@@ -54,6 +54,13 @@ class MemoryManagement(TaskStore):
             self.contexts[context_id][task_id] = manage_task
             print(f'Task {task_id} saved in context {context_id}')
 
+    async def get_task_by_context_and_id(self, context_id: str, task_id: str) -> Optional[Task]:
+        """Get a specific task by context ID and task ID."""
+        async with self.lock:
+            if context_id in self.contexts:
+                return self.contexts[context_id].get(task_id)
+            return None
+
     async def get_tasks_by_context(self, context_id: str) -> Dict[str, ManageTask]:
         """Get all tasks for a specific context ID."""
         async with self.lock:

@@ -74,7 +74,7 @@ class TaskDelegator():
                         )
                         message = append_message_metadata(message, {"agent_name": agent_name})
                         self.task_updater.update_status(TaskState.working, message)
-                    elif event.get("kind") == "status-update":
+                    elif evt_kind == "status-update":
                         if event.get('status') :
                             task_status = event.get('status', None)
                             if isinstance(task_status, TaskStatus) and task_status.message:
@@ -88,7 +88,7 @@ class TaskDelegator():
                                 )
                                 message = append_message_metadata(message, {"agent_name": agent_name})
                                 self.task_updater.update_status(TaskState.working, message)
-                    elif event.get("kind") == "artifact-update":
+                    elif evt_kind == "artifact-update":
                         artifact = event.get("artifact")
                         
                         if artifact:

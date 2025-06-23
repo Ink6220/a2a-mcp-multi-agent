@@ -25,130 +25,13 @@ from a2a.server.tasks import TaskUpdater
 from a2a.types import TaskState, TextPart, Task, Message, Part, Role
 from a2a.utils import new_agent_text_message, new_task
 from a2a.server.agent_execution import AgentExecutor, RequestContext
+from a2a_mcp.common.base_executor import BaseAgentExecutor
+from a2a_mcp.common.memory_management import MemoryManagement
 
-
-# This is a mock executor that is used to test the execute() method
-# To test a new executor, replace A2ACompliantExecutor with the new executor
-class A2ACompliantExecutor(AgentExecutor):
-    """
-    A2A Protocol Compliant Executor for ResponseFormat objects
-    Inherits from AgentExecutor for full A2A SDK compatibility.
-    """
-    def __init__(self, agent):
-        super().__init__()
-        self.agent = agent
-
-    async def execute(self, context: RequestContext, event_queue):
-        """
-        Main execution logic - fully A2A compliant using real A2A SDK
-        
-        Handles ResponseFormat objects and produces proper A2A event stream:
-        1. Creates/gets task with proper A2A Task object
-        2. Uses real TaskUpdater for state management
-        3. Follows A2A state transitions
-        4. Creates proper artifacts on completion
-        5. Handles delegation and error scenarios
-        """
-        print(f"🚀 Executing A2A-compliant agent: {self.agent.agent_name}")
-        query = context.get_user_input()
-        print(f"📝 User Query: {query}")
-        
-        # Create/get task using real A2A utilities
-        task = context.current_task
-        # if no task, create a new one
-        if not task:
-            # Do not assign to context.message directly if it's a property
-            # Instead, skip or use a method if available (for test, we just create a new message)
-            message = Message(
-                role=Role.user,
-                parts=[Part(root=TextPart(text=query))],
-                messageId=str(uuid4()),
-                contextId=f"context-{str(uuid4())[:8]}",
-                taskId=None
-            )
-            task = new_task(message)
-            event_queue.enqueue_event(task)
-            print(f"📋 Created new task: {task.id}")
-        
-        # Create real A2A TaskUpdater for proper state management
-        updater = TaskUpdater(event_queue, task.id, task.contextId)
-        working_message = new_agent_text_message(
-            "Processing your request...",
-            task.contextId,
-            task.id,
-        )
-
-        # sends message via SSE to client
-        updater.update_status(TaskState.working, working_message)
-        try:
-            session_id = task.contextId
-            response_obj = await self.agent.invoke(query, session_id)
-            print(f"🤖 Agent Response: action={response_obj.action}, status={response_obj.status}")
-            print(f"   Message: {response_obj.message}")
-            if response_obj.action == "call_next_agent":
-                print(f"🔄 Delegating to agent: {response_obj.agent_name} (input_required)")
-                delegation_message = new_agent_text_message(
-                    response_obj.message,
-                    task.contextId,
-                    task.id,
-                )
-                updater.update_status(TaskState.input_required, delegation_message, final=True)
-                # Do NOT mark as completed or add artifact here
-            elif response_obj.status == "completed":
-                # Normal task completion - use real A2A types
-                part = Part(root=TextPart(text=response_obj.message))
-                updater.add_artifact(
-                    [part], 
-                    name=f'{self.agent.agent_name}-result'
-                )
-                updater.complete()
-
-            elif response_obj.status == "input_required" and response_obj.action == "answer":
-                # Task requires user input - pause and wait
-                print("⏸️  Task paused - waiting for user input")
-                input_message = new_agent_text_message(
-                    response_obj.message,
-                    task.contextId,
-                    task.id,
-                )
-                updater.update_status(TaskState.input_required, input_message, final=True)
-                
-            elif response_obj.status == "failed":
-                # Task failed - mark as failed (not input_required)
-                print("❌ Task failed")
-                failed_message = new_agent_text_message(
-                    response_obj.message,
-                    task.contextId,
-                    task.id,
-                )
-                updater.update_status(TaskState.failed, failed_message, final=True)
-                 
-            else:
-                # Unknown status - treat as still working
-                print(f"🔄 Unknown status '{response_obj.status}' - treating as working")
-                working_message = new_agent_text_message(
-                    response_obj.message,
-                    task.contextId,
-                    task.id,
-                )
-                updater.update_status(TaskState.working, working_message)
-                 
-        except Exception as e:
-            # Exception handling - mark as failed, not input_required
-            print(f"💥 Exception occurred: {e}")
-            error_message = new_agent_text_message(
-                f"Internal error: {str(e)}",
-                task.contextId,
-                task.id,
-            )
-            updater.update_status(TaskState.failed, error_message, final=True)
-
-    async def cancel(self, context: RequestContext, event_queue):
-        # No-op for test executor
-        pass
-
-
+# --------------------------------------------------------------
 # Starlette integration simulation using real A2A types
+# --------------------------------------------------------------
+
 async def simulate_starlette_request(agent, user_message: str):
     """
     Simulate how your Starlette app would use the A2A-compliant executor
@@ -162,26 +45,30 @@ async def simulate_starlette_request(agent, user_message: str):
     # Mock request context (but use real A2A types inside)
     context = Mock()
     context.get_user_input.return_value = user_message
+
+    # Build a minimal user Message required by BaseAgentExecutor
+    user_msg = Message(
+        role=Role.user,
+        parts=[Part(root=TextPart(text=user_message))],
+        messageId=str(uuid4()),
+        contextId=f"context-{str(uuid4())[:8]}",
+        taskId=None,
+    )
+    context.message = user_msg
     context.current_task = None  # New request
-    context.message = None  # Will be created by executor with real A2A Message
-    
-    # Real A2A EventQueue for streaming
-    event_queue = EventQueue()
-    
-    # Collect events from real A2A EventQueue
-    # For testing, we'll create a simple event collector class
+
+    # Collect events from real A2A EventQueue via a simple collector
     class EventCollector:
         def __init__(self):
             self.events = []
-        
         def enqueue_event(self, event):
             self.events.append(event)
-    
-    # Use our collector instead of monkey patching
+
     event_collector = EventCollector()
-    
-    # Create A2A-compliant executor and run with collector Here is where the execute() method to be tested is called
-    executor = A2ACompliantExecutor(agent)
+
+    # Instantiate the real BaseAgentExecutor with in-memory task store
+    memory_manager = MemoryManagement()
+    executor = BaseAgentExecutor(agent, memory_manager)
     await executor.execute(context, event_collector)  # type: ignore[arg-type]
     
     # Display real A2A events (what client receives via SSE)
@@ -281,7 +168,7 @@ async def test_a2a_executor_scenarios():
     # Agent that throws exception (only this is mocked - everything else is real A2A)
     class ErrorAgent:
         agent_name = "error-agent"
-        async def invoke(self, query: str, session_id: str):
+        async def invoke(self, query: str, context_id: str, task_id: str | None = None, context: Dict[str, Any] | None = None):
             raise ValueError("Simulated agent error")
     
     error_agent = ErrorAgent()
@@ -324,7 +211,7 @@ if __name__ == "__main__":
     
     if result:
         print("\n🎯 Next Steps:")
-        print("1. Replace A2ACompliantExecutor with your real implementation")
+        print("1. Replace BaseAgentExecutor with your real implementation")
         print("2. Ensure your agents return proper ResponseFormat objects")
         print("3. Test with real A2A server and Starlette integration")
         print("4. Verify SSE streaming works with actual clients")

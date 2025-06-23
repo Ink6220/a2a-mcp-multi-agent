@@ -13,14 +13,19 @@ import os
 from typing import Dict, Any, List
 from uuid import uuid4
 
+# Extend path to nested test subfolders
+base_dir = os.path.dirname(__file__)
+sys.path.append(os.path.join(base_dir, 'test_invoke_return_type'))
+sys.path.append(os.path.join(base_dir, 'test_llm_invoke_behaviour'))
+
 # Add project root for imports
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
 
 from src.a2a_mcp.common.base_agent.a2a_openai_agent import A2AOpenaiAgent
 from src.a2a_mcp.common.types import CustomAgentCard
 from src.a2a_mcp.common.card_discovery import A2ACardDiscovery
-from test_agent_a2a_compliance import A2AComplianceTester, print_compliance_report
-from test_llm_behavior import LLMBehaviorTester, print_behavior_report
+from test_agent_a2a_compliance import A2AComplianceTester, print_compliance_report  # type: ignore
+from test_llm_behavior import LLMBehaviorTester, print_behavior_report  # type: ignore
 from a2a.types import AgentProvider, AgentCapabilities, AgentSkill
 
 def create_test_agent() -> A2AOpenaiAgent:

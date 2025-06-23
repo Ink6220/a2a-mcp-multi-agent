@@ -15,7 +15,7 @@ import os
 from typing import Dict, Any, List
 
 # Add project root for imports
-sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
+sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', '..'))
 
 from src.a2a_mcp.common.base_agent.base_agent import ResponseFormat
 
@@ -134,7 +134,7 @@ class LLMBehaviorTester:
                     query=scenario['query'],
                     context_id="test-context",
                     task_id="test-task",
-                    history=""
+                    context={}
                 )
                 
                 # Validate state and fields

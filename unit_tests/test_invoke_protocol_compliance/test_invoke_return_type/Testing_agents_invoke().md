@@ -14,7 +14,7 @@ Verify that an agent's `invoke()` method returns a `ResponseFormat(BaseModel)` o
 
 ## 🏗️ **Architecture: `ResponseFormat` Objects**
 
-The new architecture requires that the agent's `invoke()` method returns an instance of a `ResponseFormat` class, which inherits from `pydantic.BaseModel`. This enforces a strict, type-safe contract between the agent and the executor, as demonstrated in `basic_executor_with_delegator.py`.
+The new architecture requires that the agent's `invoke()` method returns an instance of a `ResponseFormat` class, which inherits from `pydantic.BaseModel`. This enforces a strict, type-safe contract between the agent and the executor, as demonstrated in `src/a2a_mcp/common/base_executor.py`.
 
 ### **1. A2A Protocol Requirements on `ResponseFormat`:**
 The returned `ResponseFormat` object **MUST** have these attributes:
@@ -384,7 +384,7 @@ except ValidationError as ve:
 
 ## 🔍 **Executor Integration**
 
-The `GenericAgentExecutor` (as seen in `basic_executor_with_delegator.py`) expects the `ResponseFormat` object from `invoke()`. It will:
+The `BaseAgentExecutor` (as seen in `src/a2a_mcp/common/base_executor.py`) expects the `ResponseFormat` object from `invoke()`. It will:
 
 1. **Access Response Attributes**: `response.action`, `response.status`, `response.message`, etc.
 2. **Handle Delegation**: Use `response.agent_name` and `response.next_agent_instruction` for task delegation
@@ -408,7 +408,7 @@ Your agent is A2A compliant when:
 - ✅ **Type Safety**: Optional fields and artifacts are handled correctly.
 - ✅ **Passes Compliance Tests**: The `A2AComplianceTester` reports 100% compliance.
 
-When all these criteria are met, your agent is ready for robust, type-safe integration with the executor as demonstrated in `basic_executor_with_delegator.py`.
+When all these criteria are met, your agent is ready for robust, type-safe integration with the executor as demonstrated in `src/a2a_mcp/common/base_executor.py`.
 
 ---
 
@@ -425,4 +425,4 @@ The enhanced test suite covers:
 | **Delegation Logic** | Conditional field requirements | Tests agent-to-agent delegation scenarios |
 | **Edge Cases** | Invalid inputs and boundary conditions | Ensures robustness under stress |
 
-This comprehensive testing ensures your agent will work correctly with the `basic_executor_with_delegator.py` and handle all scenarios defined in the A2A protocol. 
+This comprehensive testing ensures your agent will work correctly with the `src/a2a_mcp/common/base_executor.py` and handle all scenarios defined in the A2A protocol. 

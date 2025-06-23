@@ -62,9 +62,10 @@ class TaskDelegator():
         async def consume_stream(idx, stream):
             try:
                 async for event in stream:
-                    logger.info(f"[{agent_name}] Stream {idx} Type {type(event)}-{event.get("kind")} event: {event}")
-                    # Handle event types
-                    if event.get("kind") == "Message":
+                    logger.info(f"[{agent_name}] Stream {idx} event: {event}")
+                    # Normalize event discriminator to Fast-MCP standard
+                    evt_kind = event.get("kind") or event.get("type")
+                    if evt_kind == "message":
                         # Create proper message for task update
                         message = new_agent_text_message(
                             event.get("content", str(event)),
@@ -104,7 +105,7 @@ class TaskDelegator():
                                     parts=artifact.parts,
                                     metadata={"agent_name": agent_name}
                                 )
-                    elif event.get("kind") == "error":
+                    elif evt_kind == "error":
                         # Handle error events
                         error_message = new_agent_text_message(
                             f"Remote agent error: {event.get('error', 'Unknown error')}",

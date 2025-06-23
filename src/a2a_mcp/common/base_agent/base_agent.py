@@ -114,7 +114,7 @@ class BaseAgent(ABC):
         pass
 
     @abstractmethod
-    async def follow_up_invoke(self, query: str, context_id: str, task_id: str, context: Dict[str, ManageTask]) -> ResponseFormat:
+    async def follow_up_invoke(self, query: str, context_id: str, task_id: str, context: Dict[str, Task]) -> ResponseFormat:
         """Follow up Invoke the agent after delegated task have been done, to decide to `call_next_agent` or `answer` based on intermediate message between agents."""
         pass
 

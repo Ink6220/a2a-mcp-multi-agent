@@ -147,22 +147,21 @@ class A2AOpenaiAgent(BaseAgent):
             
             # Save tool calls and outputs to current task in context
             if tool_calls or tool_outputs:
-                # Find current task in context and update it with tools
                 if task_id in context:
                     current_task = context[task_id]
-                    # Create ManageTask with tools if it's not already
-                    if hasattr(current_task, 'tool_calls') and hasattr(current_task, 'tool_outputs'):
-                        current_task.tool_calls = tool_calls if tool_calls else None
-                        current_task.tool_outputs = tool_outputs if tool_outputs else None
-                        print(f"{Fore.BLUE}Updated task {task_id} with {len(tool_calls)} tool calls and {len(tool_outputs)} tool outputs{Style.RESET_ALL}")
-                    else:
-                        # Convert regular Task to ManageTask if needed
-                        from a2a_mcp.common.memory_management import ManageTask
-                        manage_task = ManageTask.from_task(current_task)
-                        manage_task.tool_calls = tool_calls if tool_calls else None
-                        manage_task.tool_outputs = tool_outputs if tool_outputs else None
-                        context[task_id] = manage_task
-                        print(f"{Fore.BLUE}Converted and updated task {task_id} with tools{Style.RESET_ALL}")
+                    if not hasattr(current_task, 'metadata') or current_task.metadata is None:
+                        current_task.metadata = {}
+                    
+                    if tool_calls:
+                        current_task.metadata['tool_calls'] = [
+                            {"tool_name": tc.tool_name, "arguments": tc.arguments} 
+                            for tc in tool_calls
+                        ]
+                    if tool_outputs:
+                        current_task.metadata['tool_outputs'] = [
+                            {"output": to.output} 
+                            for to in tool_outputs
+                        ]
             
             # สร้างและเก็บ Usage
             self._create_and_store_usage(
@@ -203,7 +202,7 @@ class A2AOpenaiAgent(BaseAgent):
                 artifacts=None
             )
 
-    async def follow_up_invoke(self, query: str, context_id: str, task_id: str, context: Dict[str, ManageTask]) -> ResponseFormat:
+    async def follow_up_invoke(self, query: str, context_id: str, task_id: str, context: Dict[str, Task]) -> ResponseFormat:
         usage_id = str(uuid4())
         result = None
         try:

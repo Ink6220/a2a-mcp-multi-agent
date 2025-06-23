@@ -135,6 +135,7 @@ class A2AOpenaiAgent(BaseAgent):
             agent_info = self.card_discovery.get_remote_agent_info()
             instruction, self.agent = self.get_agent(history, agent_info)
             print(Fore.GREEN + Style.BRIGHT + "Init agent complete" + Style.RESET_ALL)
+            print(Fore.BLUE + Style.BRIGHT + instruction + Style.RESET_ALL)
             start_time = time.time()
             result = await Runner.run(self.agent, query)
             print(Fore.GREEN + Style.BRIGHT + "[Runner.run]:" + Style.RESET_ALL, time.time() - start_time)

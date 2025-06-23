@@ -62,8 +62,9 @@ class TaskDelegator():
             try:
                 async for event in stream:
                     logger.info(f"[{agent_name}] Stream {idx} event: {event}")
-                    # Handle event types
-                    if event.get("type") == "Message":
+                    # Normalize event discriminator to Fast-MCP standard
+                    evt_kind = event.get("kind") or event.get("type")
+                    if evt_kind == "message":
                         # Create proper message for task update
                         message = new_agent_text_message(
                             event.get("content", str(event)),
@@ -71,7 +72,7 @@ class TaskDelegator():
                             self.task_updater.task_id,
                         )
                         self.task_updater.update_status(TaskState.working, message)
-                    elif event.get("type") == "TaskArtifactUpdateEvent":
+                    elif evt_kind == "artifact-update":
                         artifact = event.get("artifact")
                         if artifact:
                             # Ensure proper type conversion
@@ -85,7 +86,7 @@ class TaskDelegator():
                                 self.task_updater.add_artifact(
                                     parts=artifact.parts,
                                 )
-                    elif event.get("type") == "error":
+                    elif evt_kind == "error":
                         # Handle error events
                         error_message = new_agent_text_message(
                             f"Remote agent error: {event.get('error', 'Unknown error')}",

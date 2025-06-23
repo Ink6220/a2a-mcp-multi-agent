@@ -2,8 +2,7 @@ from abc import ABC, abstractmethod
 from typing import Any, Dict, Literal, Union, AsyncGenerator, Self, Optional, List
 from collections.abc import AsyncIterable
 from pydantic import BaseModel, Field, model_validator, ValidationError
-from a2a.types import MessageSendParams, AgentCard
-from a2a_mcp.common.memory_management import ManageTask
+from a2a.types import MessageSendParams, AgentCard, Task
 from a2a_mcp.common.types import CustomAgentCard, AgentCard, ToolCall, ToolOutput
 from a2a_mcp.common.card_discovery import A2ACardDiscovery
 import json
@@ -110,7 +109,7 @@ class BaseAgent(ABC):
 
 
     @abstractmethod
-    async def invoke(self, query: str, context_id: str, task_id: str, context: Dict[str, ManageTask]) -> ResponseFormat:
+    async def invoke(self, query: str, context_id: str, task_id: str, context: Dict[str, Task]) -> ResponseFormat:
         """Invoke the agent with a query and return a single response."""
         pass
 

@@ -24,7 +24,7 @@ from a2a.utils import new_agent_text_message, new_task
 from a2a.utils.errors import ServerError
 from a2a_mcp.common.task_delegator import TaskDelegator
 from a2a_mcp.common.base_agent.base_agent import BaseAgent, ResponseFormat
-from a2a_mcp.common.memory_management import MemoryManagement, ManageTask
+from a2a_mcp.common.memory_management import MemoryManagement
 from a2a_mcp.common.utils import artifact_dict_to_parts, get_message_data, append_message_metadata
 import logging
 import json
@@ -95,9 +95,7 @@ class BaseAgentExecutor(AgentExecutor):
         task = context.current_task or new_task(message)
         if not context.current_task:
             event_queue.enqueue_event(task)
-            # Convert to ManageTask and save to memory
-            manage_task = ManageTask.from_task(task)
-            await self.memory.save(manage_task)
+            await self.memory.save(task)
 
         task_id = task.id
         context_id = task.contextId

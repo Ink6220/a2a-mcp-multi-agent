@@ -6,25 +6,6 @@ from typing import Dict, Any, Optional, List, Union
 from a2a_mcp.common.types import ToolCall, ToolOutput
 import copy
 
-class ManageTask(Task):
-    tool_calls: Optional[List[ToolCall]]
-    tool_outputs: Optional[List[ToolOutput]]
-    
-    @classmethod
-    def from_task(cls, task: Task) -> 'ManageTask':
-        """Create ManageTask from regular Task."""
-        return cls(
-            id=task.id,
-            contextId=task.contextId,
-            status=task.status,
-            kind=task.kind,
-            history=task.history,
-            artifacts=task.artifacts,
-            metadata=task.metadata,
-            tool_calls=None,
-            tool_outputs=None
-        )
-
 class MemoryManagement(TaskStore):
     """
     Context memory implementation that extends TaskStore
@@ -32,26 +13,20 @@ class MemoryManagement(TaskStore):
     """
     
     def __init__(self):
-        self.contexts: Dict[str, Dict[str, ManageTask]] = {}
+        self.contexts: Dict[str, Dict[str, Task]] = {}
         self.lock = asyncio.Lock()
 
-    async def save(self, task: Union[Task, ManageTask]) -> None:
+    async def save(self, task: Union[Task, Task]) -> None:
         """Saves or updates a task in the context-grouped store."""
-        # Convert Task to ManageTask if needed
-        if isinstance(task, Task) and not isinstance(task, ManageTask):
-            manage_task = ManageTask.from_task(task)
-        else:
-            manage_task = task
-            
-        # save ตาม context_id ใน self.contexts
+    
         async with self.lock:
-            context_id = manage_task.contextId
-            task_id = manage_task.id
-            
+            context_id = task.contextId
+            task_id = task.id
+
             if context_id not in self.contexts:
                 self.contexts[context_id] = {}
             # save/update task ใน context
-            self.contexts[context_id][task_id] = manage_task
+            self.contexts[context_id][task_id] = task
             print(f'Task {task_id} saved in context {context_id}')
 
     async def get_task_by_context_and_id(self, context_id: str, task_id: str) -> Optional[Task]:
@@ -61,14 +36,14 @@ class MemoryManagement(TaskStore):
                 return self.contexts[context_id].get(task_id)
             return None
 
-    async def get_tasks_by_context(self, context_id: str) -> Dict[str, ManageTask]:
+    async def get_tasks_by_context(self, context_id: str) -> Dict[str, Task]:
         """Get all tasks for a specific context ID."""
         async with self.lock:
             if context_id in self.contexts:
                 return self.contexts[context_id]
             return {}
 
-    async def get(self, task_id: str) -> Optional[ManageTask]:
+    async def get(self, task_id: str) -> Optional[Task]:
         """Retrieves a task from any context by task ID."""
         async with self.lock:
             for context_id, tasks in self.contexts.items():
@@ -103,7 +78,7 @@ class MemoryManagement(TaskStore):
         """Get the number of tasks in a specific context."""
         return len(self.contexts.get(context_id, {}))
     
-    async def get_all_context_tasks(self) -> Dict[str, Dict[str, ManageTask]]:
+    async def get_all_context_tasks(self) -> Dict[str, Dict[str, Task]]:
         """
         Get a deep copy of all context tasks, This method is thread safe and returns a deep-copy
         This method is good enough to push to external databases

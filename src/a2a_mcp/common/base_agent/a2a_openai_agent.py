@@ -32,7 +32,6 @@ from colorama import Fore, Style, init
 from pydantic import ValidationError
 import httpx
 from uuid import uuid4
-from a2a_mcp.common.memory_management import MemoryManagement,ManageTask
 class A2AOpenaiAgent(BaseAgent):
     def __init__(self, agent_card: CustomAgentCard, card_discovery: A2ACardDiscovery, mcp_server: list=[]):
         super().__init__(agent_card.modelName, agent_card, card_discovery)  # Call BaseAgent's __init__
@@ -125,7 +124,7 @@ class A2AOpenaiAgent(BaseAgent):
         
         return _stream_connection()
 
-    async def invoke(self, query: str, context_id: str, task_id: str, context: Dict[str, ManageTask]) -> ResponseFormat:
+    async def invoke(self, query: str, context_id: str, task_id: str, context: Dict[str, Task]) -> ResponseFormat:
         # TODO: maybe we should go through together on invoke(), if we are going to change response format etc (im not too clear on this)
         usage_id = str(uuid4())
         result = None
@@ -220,27 +219,25 @@ class A2AOpenaiAgent(BaseAgent):
             print(result.raw_responses[0].usage)
             print(result.final_output)
             api_usage = result.raw_responses[0].usage
-            #Get tool calls and outputs and save to context store
             tool_calls, tool_outputs = self._extract_tool_calls_and_outputs(result)
             
             # Save tool calls and outputs to current task in context
             if tool_calls or tool_outputs:
-                # Find current task in context and update it with tools
                 if task_id in context:
                     current_task = context[task_id]
-                    # Create ManageTask with tools if it's not already
-                    if hasattr(current_task, 'tool_calls') and hasattr(current_task, 'tool_outputs'):
-                        current_task.tool_calls = tool_calls if tool_calls else None
-                        current_task.tool_outputs = tool_outputs if tool_outputs else None
-                        print(f"{Fore.BLUE}Updated task {task_id} with {len(tool_calls)} tool calls and {len(tool_outputs)} tool outputs{Style.RESET_ALL}")
-                    else:
-                        # Convert regular Task to ManageTask if needed
-                        from a2a_mcp.common.memory_management import ManageTask
-                        manage_task = ManageTask.from_task(current_task)
-                        manage_task.tool_calls = tool_calls if tool_calls else None
-                        manage_task.tool_outputs = tool_outputs if tool_outputs else None
-                        context[task_id] = manage_task
-                        print(f"{Fore.BLUE}Converted and updated task {task_id} with tools{Style.RESET_ALL}")
+                    if not hasattr(current_task, 'metadata') or current_task.metadata is None:
+                        current_task.metadata = {}
+                    
+                    if tool_calls:
+                        current_task.metadata['tool_calls'] = [
+                            {"tool_name": tc.tool_name, "arguments": tc.arguments} 
+                            for tc in tool_calls
+                        ]
+                    if tool_outputs:
+                        current_task.metadata['tool_outputs'] = [
+                            {"output": to.output} 
+                            for to in tool_outputs
+                        ]
             
             # สร้างและเก็บ Usage
             self._create_and_store_usage(
@@ -415,20 +412,17 @@ class A2AOpenaiAgent(BaseAgent):
                 "agent_name": ""
             }
 
-    #TODO: Someone should refactor performance of this function, it is a bit messy
-    def postprocess(self, context: Dict[str, ManageTask]) -> str:
+    #TODO: refactor performance of this function and standard pylance , it is a bit messy
+    def postprocess(self, context: Dict[str, Task]) -> str:
         lines = []
+        # print(f"\n{Fore.CYAN}=== RAW CONTEXT ==={Style.RESET_ALL}")
+        # print(context)
+        # print(f"\n{Fore.CYAN}=========================={Style.RESET_ALL}")
+
         for task_id, task in context.items():
             lines.append(f"=== Task {task.id} ===")
-            # Log the full task structure for debugging
-            print(f"\n{Fore.YELLOW}DEBUG: Task {task.id} structure:{Style.RESET_ALL}")
-            print(f"  - History count: {len(task.history) if task.history else 0}")
-            print(f"  - Tool calls count: {len(task.tool_calls) if hasattr(task, 'tool_calls') and task.tool_calls else 0}")
-            print(f"  - Tool outputs count: {len(task.tool_outputs) if hasattr(task, 'tool_outputs') and task.tool_outputs else 0}")
             if task.history:
                 for i, message in enumerate(task.history):
-                    print(f"  DEBUG: Processing message {i}: type={type(message)}, kind={getattr(message, 'kind', 'N/A')}")
-                    # Handle different types of messages
                     if hasattr(message, 'kind') and message.kind == 'message':
                         role = getattr(message, 'role', 'unknown')
                         role_str = role.value if hasattr(role, 'value') else str(role)
@@ -482,15 +476,28 @@ class A2AOpenaiAgent(BaseAgent):
                             if agent_parts:
                                 lines.append(f"agent: {' '.join(agent_parts)}")
             
-            # แสดง tool calls และ outputs ถ้ามี
-            if hasattr(task, 'tool_calls') and task.tool_calls:
-                for i, tool_call in enumerate(task.tool_calls):
-                    lines.append(f"Tool Call {i+1} - Name: {tool_call.tool_name}, Arguments: {json.dumps(tool_call.arguments, ensure_ascii=False)}")
-            
-            if hasattr(task, 'tool_outputs') and task.tool_outputs:
-                for i, tool_output in enumerate(task.tool_outputs):
-                    lines.append(f"Tool Result {i+1} - Output: {tool_output.output}")
+            metadata = task.metadata
+            tool_calls = metadata.get('tool_calls', []) if metadata else []
+            tool_outputs = metadata.get('tool_outputs', []) if metadata else []
 
+            if tool_calls:
+                for i, tool_call in enumerate(tool_calls):
+                    if isinstance(tool_call, dict):
+                        tool_name = tool_call.get('tool_name', 'unknown')
+                        arguments = tool_call.get('arguments', {})
+                    else:
+                        tool_name = tool_call.tool_name
+                        arguments = tool_call.arguments
+                    lines.append(f"Tool Call {i+1} - Name: {tool_name}, Arguments: {json.dumps(arguments, ensure_ascii=False)}")
+
+            if tool_outputs:
+                for i, tool_output in enumerate(tool_outputs):
+                    if isinstance(tool_output, dict):
+                        output = tool_output.get('output', '')
+                    else:
+                        output = tool_output.output
+                    lines.append(f"Tool Result {i+1} - Output: {output}")
+            
             lines.append("")
         
         result = "\n".join(lines)

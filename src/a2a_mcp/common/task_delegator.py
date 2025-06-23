@@ -58,17 +58,12 @@ class TaskDelegator():
         streams_done = [False] * len(ongoing_streams)
         tasks = []
 
-        # Use a thread-safe list to collect results from different coroutines
-        collected_observations = []
-
         async def consume_stream(idx, stream):
-            stream_observations = []
             try:
                 async for event in stream:
                     logger.info(f"[{agent_name}] Stream {idx} Type {type(event)}-{event.get("kind")} event: {event}")
                     # Handle event types
                     if event.get("kind") == "Message":
-                        stream_observations.append(f"Message from {agent_name}: {event.get("content", str(event))}")
                         # Create proper message for task update
                         message = new_agent_text_message(
                             event.get("content", str(event)),
@@ -81,7 +76,6 @@ class TaskDelegator():
                             task_status = event.get('status', None)
                             if isinstance(task_status, TaskStatus) and task_status.message:
                                 message_status = task_status.message
-                                stream_observations.append(f"Message from {agent_name}: {json.dumps([part.model_dump() for part in message_status.parts], ensure_ascii=False)}")
                                 
                                 # Create proper message for task update
                                 message = new_agent_text_message(
@@ -101,15 +95,12 @@ class TaskDelegator():
                                     parts=parts,
                                     # additional fields eg id, metadata etc can be added
                                 )
-                                stream_observations.append(f"Artifact received from {agent_name}: {json.dumps([part.model_dump() for part in parts], ensure_ascii=False)}.")
                             elif hasattr(artifact, 'parts'):
                                 self.task_updater.add_artifact(
                                     parts=artifact.parts,
                                 )
-                                stream_observations.append(f"Artifact received from {agent_name}: {json.dumps([part.model_dump() for part in artifact.parts], ensure_ascii=False)}.")
                     elif event.get("kind") == "error":
                         # Handle error events
-                        stream_observations.append(f"Error from {agent_name}: {event.get('error', 'Unknown error')}")
                         error_message = new_agent_text_message(
                             f"Remote agent error: {event.get('error', 'Unknown error')}",
                             self.task_updater.context_id,
@@ -119,7 +110,6 @@ class TaskDelegator():
                     # Add more event types as needed
             except Exception as e:
                 logger.error(f"[{agent_name}] Stream {idx} error: {e}")
-                stream_observations.append(e)
                 error_message = new_agent_text_message(
                     f"Stream processing error: {str(e)}",
                     self.task_updater.context_id,
@@ -128,7 +118,6 @@ class TaskDelegator():
                 self.task_updater.update_status(TaskState.failed, error_message)
             finally:
                 streams_done[idx] = True
-                collected_observations.extend(stream_observations)
 
         # Launch all stream consumers
         for idx, stream in enumerate(ongoing_streams):
@@ -138,8 +127,7 @@ class TaskDelegator():
         await asyncio.gather(*tasks)
 
         # All streams are done if all True
-        all_observation = "\n".join(collected_observations) if collected_observations else "Delegated task completed with no observable output."
-        return all(streams_done), all_observation
+        return all(streams_done)
 
 
     

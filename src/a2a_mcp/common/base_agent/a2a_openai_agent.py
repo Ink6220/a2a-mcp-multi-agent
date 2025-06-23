@@ -57,8 +57,8 @@ class A2AOpenaiAgent(BaseAgent):
             
         )
     
-    def get_follow_up_agent(self, history: str, agent_info: str, observation: str):
-        instruction = self.root_follow_up_instruction(chat_history=history, agent_info=agent_info, observation=observation)
+    def get_follow_up_agent(self, history: str, agent_info: str):
+        instruction = self.root_follow_up_instruction(chat_history=history, agent_info=agent_info)
         print(f"{Fore.BLUE}{instruction}{Style.RESET_ALL}")
         return instruction, Agent(
             name=self.agent_card.name,
@@ -202,7 +202,7 @@ class A2AOpenaiAgent(BaseAgent):
                 artifacts=None
             )
 
-    async def follow_up_invoke(self, query: str, context_id: str, task_id: str, context: Dict[str, ManageTask], observation: str) -> ResponseFormat:
+    async def follow_up_invoke(self, query: str, context_id: str, task_id: str, context: Dict[str, ManageTask]) -> ResponseFormat:
         usage_id = str(uuid4())
         result = None
         try:
@@ -210,7 +210,7 @@ class A2AOpenaiAgent(BaseAgent):
             
             #Generate agent result
             agent_info = self.card_discovery.get_remote_agent_info()
-            instruction, self.agent = self.get_follow_up_agent(history, agent_info, observation)
+            instruction, self.agent = self.get_follow_up_agent(history, agent_info)
             print(Fore.GREEN + Style.BRIGHT + "Init agent complete" + Style.RESET_ALL)
             start_time = time.time()
             result = await Runner.run(self.agent, query)
@@ -599,9 +599,9 @@ class A2AOpenaiAgent(BaseAgent):
         prompt = self.agent_card.systemPrompt or "You are a helpful assistant."
         return A2A_OPENAI_BASE_PROMPT.format(system_prompt=prompt, chat_history=chat_history, agent_info=agent_info)
 
-    def root_follow_up_instruction(self, chat_history: str, tools: Any = None, agent_info: Any = None, observation: str = "") -> str:
+    def root_follow_up_instruction(self, chat_history: str, tools: Any = None, agent_info: Any = None) -> str:
         prompt = self.agent_card.systemPrompt or "You are a helpful assistant."
-        return A2A_OPENAI_FOLLOW_UP_BASE_PROMPT.format(system_prompt=prompt, chat_history=chat_history, agent_info=agent_info, observation=observation)
+        return A2A_OPENAI_FOLLOW_UP_BASE_PROMPT.format(system_prompt=prompt, chat_history=chat_history, agent_info=agent_info)
 
     def _extract_tool_calls_and_outputs(self, result) -> tuple[list[ToolCall], list[ToolOutput]]:
         """แยกข้อมูล tool calls และ tool outputs จาก result"""

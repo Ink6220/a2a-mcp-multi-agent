@@ -138,7 +138,6 @@ class BaseAgentExecutor(AgentExecutor):
             # --- DELEGATION LOOP ---
             while response.action == "call_next_agent":
                 print(f"🔄 Delegating to agent: {response.agent_name} (input_required)")
-                all_observation = ""
                 delegation_message = new_agent_text_message(
                     response.message,
                     task.contextId,
@@ -151,12 +150,10 @@ class BaseAgentExecutor(AgentExecutor):
                     self.ongoing_tasks.append(stream)
                 
                 # Use TaskDelegator's stream management
-                delegation_complete, observation = await self.delegator.manage_streams(
+                delegation_complete = await self.delegator.manage_streams(
                     self.ongoing_tasks,
                     response.agent_name or "unknown_agent"
                 )
-                all_observation += observation
-                print(f"📝 Observation from {response.agent_name}: {observation}")
 
                 # TODO: Add second invoke call logic here
                 # TODO: Create function to piece together context etc from delegated agents
@@ -170,7 +167,6 @@ class BaseAgentExecutor(AgentExecutor):
                     context_id=context_id,
                     task_id=task_id,
                     context=context_tasks,
-                    observation=all_observation
                 )
                 print(f"🤖 Agent Response after delegation: action={response.action}, status={response.status}")
 

@@ -82,7 +82,7 @@ Here are chat history in a simple format without <thinking> and <output> XML sch
 """
 
 A2A_OPENAI_NATIVE_BASE_PROMPT = """
-You can be expert delegator that can delegate the user request to the appropriate remote agents or helpful assistant defined in system prompt.
+You are {agent_name}. You can be expert delegator that can delegate the user request to the appropriate remote agents or helpful assistant defined in system prompt.
 
 ## DISCOVERY
 - Here are lists of all available remote agents you can use to delegate the task.
@@ -95,7 +95,8 @@ Agents:
   Description: Delegate the task to appropriate agent that are available in DISCOVERY.
   Parameters:
     - agent_name (str): Name of the agent responsible for the current response.
-    - message (str): Message to another agent.
+    - next_agent_instruction (str): Clear description of the task to be executed.
+    - artifacts (str): Optional structured JSON data to be passed as artifacts; must be JSON-serializable. As input data for the next agent (that exactly match to the example usage of the skill to be used) or additional structured response data.
 
 [2] answer
   Description: Answer the question with current knowledge or using tools (if available).
@@ -125,12 +126,62 @@ Make sure your final response is a valid XML schema follow the below Response Sc
     <agent_name>( Name of the agent responsible for the current response from available remote agent, if action is call_next_agent.)</agent_name>
     <message>( The message to deliver to the user or to another agent. )</message>
     <next_agent_instruction>( Message content, passed to the next agent as an instruction TODO )</next_agent_instruction>
-    <next_agent_schema>( Schema-compatible dictionary containing input data for the next agent, if applicable. )</next_agent_schema>
+    <artifacts>( Schema-compatible dictionary containing input data for the next agent, if applicable. )</artifacts>
+</output>
+"""
+
+A2A_OPENAI_NATIVE_FOLLOW_UP_BASE_PROMPT = """
+You are {agent_name}. You can be expert delegator that can delegate the user request to the appropriate remote agents or helpful assistant defined in system prompt.
+
+## DISCOVERY
+- Here are lists of all available remote agents you can use to delegate the task.
+
+Agents:
+{agent_info}
+
+## ACTION SPACE
+[1] call_next_agent
+  Description: Delegate the task to appropriate agent that are available in DISCOVERY, IF You think based on incoming Question cannot be resolved by current <chat_history> information (can delegate to the same agent).
+  Parameters:
+    - agent_name (str): Name of the agent responsible for the current response.
+    - next_agent_instruction (str): Clear description of the task to be executed.
+    - artifacts (str): Optional structured JSON data to be passed as artifacts; must be JSON-serializable. As input data for the next agent (that exactly match to the example usage of the skill to be used) or additional structured response data.
+
+[2] answer
+  Description: Answer the question with current knowledge or using tools (if available) together with <chat_history> information.
+  Parameters:
+    - message (str): Final answer to the question
+
+## SYSTEM PROMPT
+<system_prompt>
+{system_prompt}
+</system_prompt>
+
+You will see some of [ToolUse → ID: ...] and [ToolResult ← ID: ...] which mean in previous conversation turn you already calling tools (ToolUse) and get some information (ToolResult).
+DO NOT call the same tool if the information does not change.
+
+You have been delegate task to appropriate agent and getting some useful result (intermediate message between you and other agent) between <chat_history> below.
+Here are chat history in a simple format without <thinking> and <output> XML schema.
+## Chat History:
+<chat_history>
+{chat_history}
+</chat_history>
+
+Make sure your final response is a valid XML schema follow the below Response Schema (include <output> blocks):
+## Response Schema:
+<output>
+    <action>( Action to be taken, either respond directly or delegate to another agent. Literal["answer", "call_next_agent"] )</action>
+    <status>( Literal['input_required', 'completed', 'error', 'hang_up'] )</status>
+    <custom_status>( Optional custom state such as 'hang_up', 'timeout', etc. for extended flow semantics. Default as ' ' )</custom_status>
+    <agent_name>( Name of the agent responsible for the current response from available remote agent, if action is call_next_agent.)</agent_name>
+    <message>( The message to deliver to the user or to another agent. )</message>
+    <next_agent_instruction>( Message content, passed to the next agent as an instruction TODO )</next_agent_instruction>
+    <artifacts>( Schema-compatible dictionary containing input data for the next agent, if applicable. )</artifacts>
 </output>
 """
 
 A2A_NOVA_BASE_PROMPT = """
-You can be expert delegator that can delegate the user request to the appropriate remote agents or helpful assistant defined in system prompt.
+You are {agent_name}. You can be expert delegator that can delegate the user request to the appropriate remote agents or helpful assistant defined in system prompt.
 
 ## DISCOVERY
 - Here are lists of all available remote agents you can use to delegate the task.
@@ -143,7 +194,8 @@ Agents:
   Description: Delegate the task to appropriate agent that are available in DISCOVERY.
   Parameters:
     - agent_name (str): Name of the agent responsible for the current response.
-    - message (str): Message to another agent.
+    - next_agent_instruction (str): Clear description of the task to be executed.
+    - artifacts (str): Optional structured JSON data to be passed as artifacts; must be JSON-serializable. As input data for the next agent (that exactly match to the example usage of the skill to be used) or additional structured response data.
 
 [2] answer
   Description: Answer the question with current knowledge or using tools (if available).
@@ -182,7 +234,66 @@ Make sure your final response is a valid XML schema follow the below Response Sc
     <agent_name>( Name of the agent responsible for the current response from available remote agent, if action is call_next_agent.)</agent_name>
     <message>( The message to deliver to the user or to another agent. )</message>
     <next_agent_instruction>( Message content, passed to the next agent as an instruction TODO )</next_agent_instruction>
-    <next_agent_schema>( Schema-compatible dictionary containing input data for the next agent, if applicable. )</next_agent_schema>
+    <artifacts>( Schema-compatible dictionary containing input data for the next agent, if applicable. )</artifacts>
+</output>
+"""
+
+A2A_NOVA_FOLLOW_UP_BASE_PROMPT = """
+You are {agent_name}. You can be expert delegator that can delegate the user request to the appropriate remote agents or helpful assistant defined in system prompt.
+
+## DISCOVERY
+- Here are lists of all available remote agents you can use to delegate the task.
+
+Agents:
+{agent_info}
+
+## ACTION SPACE
+[1] call_next_agent
+  Description: Delegate the task to appropriate agent that are available in DISCOVERY, IF You think based on incoming Question cannot be resolved by current <chat_history> information (can delegate to the same agent).
+  Parameters:
+    - agent_name (str): Name of the agent responsible for the current response.
+    - next_agent_instruction (str): Clear description of the task to be executed.
+    - artifacts (str): Optional structured JSON data to be passed as artifacts; must be JSON-serializable. As input data for the next agent (that exactly match to the example usage of the skill to be used) or additional structured response data.
+
+[2] answer
+  Description: Answer the question with current knowledge or using tools (if available) together with <chat_history> information.
+  Parameters:
+    - message (str): Final answer to the question
+
+## SYSTEM PROMPT
+<system_prompt>
+{system_prompt}
+</system_prompt>
+
+
+### You have access to the following tools
+<tools>
+{tools}
+</tools>
+
+You will see some of [ToolUse → ID: ...] and [ToolResult ← ID: ...] which mean in previous conversation turn you already calling tools (ToolUse) and get some information (ToolResult).
+DO NOT call the same tool if the information does not change.
+
+You have been delegate task to appropriate agent and getting some useful result (intermediate message between you and other agent) between <chat_history> below.
+Here are chat history in a simple format without <thinking> and <output> XML schema.
+## Chat History:
+<chat_history>
+{chat_history}
+</chat_history>
+
+Make sure your final response is a valid XML schema follow the below Response Schema (include <output> blocks):
+## Response Schema:
+<thinking>
+( your thoughts go here )
+</thinking>
+<output>
+    <action>( Action to be taken, either respond directly or delegate to another agent. Literal["answer", "call_next_agent"] )</action>
+    <status>( Literal['input_required', 'completed', 'error', 'hang_up'] )</status>
+    <custom_status>( Optional custom state such as 'hang_up', 'timeout', etc. for extended flow semantics. Default as ' ' )</custom_status>
+    <agent_name>( Name of the agent responsible for the current response from available remote agent, if action is call_next_agent.)</agent_name>
+    <message>( The message to deliver to the user or to another agent. )</message>
+    <next_agent_instruction>( Message content, passed to the next agent as an instruction TODO )</next_agent_instruction>
+    <artifacts>( Schema-compatible dictionary containing input data for the next agent, if applicable. )</artifacts>
 </output>
 """
 

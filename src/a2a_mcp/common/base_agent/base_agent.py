@@ -70,6 +70,11 @@ class ExtraUsage(BaseModel):
     reasoning_tokens: int
     cache_tokens: int
 
+class ApiUsage(BaseModel):
+    prompt_tokens: int | None
+    completion_tokens: int | None
+    extra_usage: ExtraUsage | None
+
 class Usage(BaseModel):
     usage_id: str
     context_id: str

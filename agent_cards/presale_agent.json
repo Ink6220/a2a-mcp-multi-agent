@@ -3,7 +3,7 @@
     "description": "Initiate contact, qualify customer availability. Only call this agent to ask for availability only, otherwise call other agent. Input format: {{user_question}}",
     "url": "http://localhost:10001/",
     "provider": {
-        "organization": "openai",
+        "organization": "aws",
         "url":"None"
     },
     "version": "1.0.0",
@@ -43,7 +43,7 @@
             "outputModes": null
         }
     ],
-    "modelName":"gpt-4.1-mini",
+    "modelName":"us.amazon.nova-lite-v1:0",
     "systemPrompt": "",
     "nextAgent": ["http://localhost:10002/"]
 }

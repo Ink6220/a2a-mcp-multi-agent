@@ -410,101 +410,6 @@ class A2AOpenaiAgent(BaseAgent):
                 "call_next_agent": False,
                 "agent_name": ""
             }
-
-    #TODO: refactor performance of this function and standard pylance , it is a bit messy
-    def postprocess(self, context: Dict[str, Task]) -> str:
-        lines = []
-        # print(f"\n{Fore.CYAN}=== RAW CONTEXT ==={Style.RESET_ALL}")
-        # print(context)
-        # print(f"\n{Fore.CYAN}=========================={Style.RESET_ALL}")
-
-        for task_id, task in context.items():
-            lines.append(f"=== Task {task.id} ===")
-            if task.history:
-                for i, message in enumerate(task.history):
-                    if hasattr(message, 'kind') and message.kind == 'message':
-                        role = getattr(message, 'role', 'unknown')
-                        role_str = role.value if hasattr(role, 'value') else str(role)
-                        
-                        if hasattr(message, 'parts') and message.parts:
-                            parts = []
-                            for part in message.parts:
-                                # Part is a RootModel, access the actual content via .root
-                                if hasattr(part, 'root'):
-                                    actual_part = part.root
-                                    if hasattr(actual_part, 'text'):
-                                        parts.append(actual_part.text)
-                                    elif hasattr(actual_part, 'data'):
-                                        parts.append(f"[Data: {json.dumps(actual_part.data)}]")
-                                    elif hasattr(actual_part, 'file'):
-                                        file_name = getattr(actual_part.file, 'name', 'unknown')
-                                        parts.append(f"[File: {file_name}]")
-                                    else:
-                                        parts.append(str(actual_part))
-                                else:
-                                    # Fallback if part doesn't have root
-                                    if hasattr(part, 'text'):
-                                        parts.append(part.text)
-                                    else:
-                                        parts.append(str(part))
-                            
-                            if parts:
-                                lines.append(f"{role_str}: {' '.join(parts)}")
-                        else:
-                            content = getattr(message, 'content', str(message))
-                            lines.append(f"{role_str}: {content}")
-                
-                if hasattr(task, 'artifacts') and task.artifacts:
-                    print(f"  DEBUG: Found {len(task.artifacts)} artifacts")
-                    for artifact in task.artifacts:
-                        if hasattr(artifact, 'parts') and artifact.parts:
-                            agent_parts = []
-                            for part in artifact.parts:
-                                if hasattr(part, 'root'):
-                                    actual_part = part.root
-                                    if hasattr(actual_part, 'text'):
-                                        agent_parts.append(actual_part.text)
-                                    else:
-                                        agent_parts.append(str(actual_part))
-                                else:
-                                    if hasattr(part, 'text'):
-                                        agent_parts.append(part.text)
-                                    else:
-                                        agent_parts.append(str(part))
-                            
-                            if agent_parts:
-                                lines.append(f"agent: {' '.join(agent_parts)}")
-            
-            metadata = task.metadata
-            tool_calls = metadata.get('tool_calls', []) if metadata else []
-            tool_outputs = metadata.get('tool_outputs', []) if metadata else []
-
-            if tool_calls:
-                for i, tool_call in enumerate(tool_calls):
-                    if isinstance(tool_call, dict):
-                        tool_name = tool_call.get('tool_name', 'unknown')
-                        arguments = tool_call.get('arguments', {})
-                    else:
-                        tool_name = tool_call.tool_name
-                        arguments = tool_call.arguments
-                    lines.append(f"Tool Call {i+1} - Name: {tool_name}, Arguments: {json.dumps(arguments, ensure_ascii=False)}")
-
-            if tool_outputs:
-                for i, tool_output in enumerate(tool_outputs):
-                    if isinstance(tool_output, dict):
-                        output = tool_output.get('output', '')
-                    else:
-                        output = tool_output.output
-                    lines.append(f"Tool Result {i+1} - Output: {output}")
-            
-            lines.append("")
-        
-        result = "\n".join(lines)
-        print(f"\n{Fore.CYAN}=== POSTPROCESS RESULT ==={Style.RESET_ALL}")
-        print(result)
-        print(f"{Fore.CYAN}=========================={Style.RESET_ALL}\n")
-        
-        return result
     
     def _extract_message_content(self, chunk):
         """Helper method to extract relevant message content from a chunk"""
@@ -612,7 +517,6 @@ class A2AOpenaiAgent(BaseAgent):
         return A2A_OPENAI_FOLLOW_UP_BASE_PROMPT.format(agent_name=self.agent_card.name, system_prompt=prompt, chat_history=chat_history, agent_info=agent_info)
 
     def _extract_tool_calls_and_outputs(self, result) -> tuple[list[ToolCall], list[ToolOutput]]:
-        """แยกข้อมูล tool calls และ tool outputs จาก result"""
         tool_calls = []
         tool_outputs = []
         
@@ -651,7 +555,6 @@ class A2AOpenaiAgent(BaseAgent):
         return tool_calls, tool_outputs
 
     def _extract_tool_call(self, item) -> ToolCall:
-        """แยกข้อมูล tool call จาก ToolCallItem"""
         print("  -> Found tool_call_item")
         tool_name = 'unknown'
         arguments = {}
@@ -681,7 +584,6 @@ class A2AOpenaiAgent(BaseAgent):
         return ToolCall(tool_name=tool_name, arguments=arguments)
 
     def _extract_tool_output(self, item) -> ToolOutput:
-        """แยกข้อมูล tool output จาก ToolCallOutputItem"""
         print("  -> Found tool_call_output_item")
         output_str = ""
         
@@ -695,44 +597,3 @@ class A2AOpenaiAgent(BaseAgent):
         
         print(f"     Output: {output_str[:100]}...")
         return ToolOutput(output=output_str)
-
-    def _create_and_store_usage(self, usage_id: str, context_id: str, task_id: str, 
-                               query: str, result, api_usage, tool_calls: list[ToolCall], 
-                               tool_outputs: list[ToolOutput]) -> Usage:
-        """สร้างและเก็บ Usage object"""
-        usage = Usage(
-            usage_id=usage_id,
-            context_id=context_id,
-            task_id=task_id,
-            model_name=self.model_name,
-            user_input=query,
-            output=result.final_output,
-            prompt_tokens=api_usage.input_tokens,
-            completion_tokens=api_usage.output_tokens,
-            extra_usage=ExtraUsage(
-                reasoning_tokens=api_usage.input_tokens_details.cached_tokens, 
-                cache_tokens=api_usage.output_tokens_details.reasoning_tokens
-            ),
-            tool_calls=tool_calls if tool_calls else None,
-            tool_outputs=tool_outputs if tool_outputs else None        )
-        
-        self.record_usage(usage)
-        
-        # Print usage details
-        print(f"\n{Fore.MAGENTA}=== USAGE DETAILS ==={Style.RESET_ALL}")
-        print(f"Usage ID: {usage.usage_id}")
-        print(f"Context ID: {usage.context_id}")
-        print(f"Task ID: {usage.task_id}")
-        print(f"Model: {usage.model_name}")
-        print(f"Prompt Tokens: {usage.prompt_tokens}")
-        print(f"Completion Tokens: {usage.completion_tokens}")
-        if usage.extra_usage:
-            print(f"Reasoning Tokens: {usage.extra_usage.reasoning_tokens}")
-            print(f"Cache Tokens: {usage.extra_usage.cache_tokens}")
-        if usage.tool_calls:
-            print(f"Tool Calls: {len(usage.tool_calls)}")
-            for i, tool_call in enumerate(usage.tool_calls):
-                print(f"  [{i+1}] {tool_call.tool_name}: {tool_call.arguments}")
-        if usage.tool_outputs:
-            print(f"Tool Outputs: {len(usage.tool_outputs)}")
-        print(f"{Fore.MAGENTA}==================={Style.RESET_ALL}\n")

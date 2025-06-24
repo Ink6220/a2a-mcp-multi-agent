@@ -612,7 +612,6 @@ class A2AOpenaiAgent(BaseAgent):
         return A2A_OPENAI_FOLLOW_UP_BASE_PROMPT.format(system_prompt=prompt, chat_history=chat_history, agent_info=agent_info)
 
     def _extract_tool_calls_and_outputs(self, result) -> tuple[list[ToolCall], list[ToolOutput]]:
-        """แยกข้อมูล tool calls และ tool outputs จาก result"""
         tool_calls = []
         tool_outputs = []
         
@@ -651,7 +650,6 @@ class A2AOpenaiAgent(BaseAgent):
         return tool_calls, tool_outputs
 
     def _extract_tool_call(self, item) -> ToolCall:
-        """แยกข้อมูล tool call จาก ToolCallItem"""
         print("  -> Found tool_call_item")
         tool_name = 'unknown'
         arguments = {}
@@ -681,7 +679,6 @@ class A2AOpenaiAgent(BaseAgent):
         return ToolCall(tool_name=tool_name, arguments=arguments)
 
     def _extract_tool_output(self, item) -> ToolOutput:
-        """แยกข้อมูล tool output จาก ToolCallOutputItem"""
         print("  -> Found tool_call_output_item")
         output_str = ""
         
@@ -699,7 +696,6 @@ class A2AOpenaiAgent(BaseAgent):
     def _create_and_store_usage(self, usage_id: str, context_id: str, task_id: str, 
                                query: str, result, api_usage, tool_calls: list[ToolCall], 
                                tool_outputs: list[ToolOutput]) -> Usage:
-        """สร้างและเก็บ Usage object"""
         usage = Usage(
             usage_id=usage_id,
             context_id=context_id,

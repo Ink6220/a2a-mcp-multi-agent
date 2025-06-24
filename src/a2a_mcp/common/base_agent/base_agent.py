@@ -151,8 +151,34 @@ class BaseAgent(ABC):
     ) -> AsyncGenerator[dict, None]:
         """Form a connection and stream messages to a remote agent by name, yielding events as they arrive."""
         pass
-
-
+    
+    @abstractmethod
+    def postprocess(self, context: Dict[str, Task]) -> str:
+        """Create chat history from the context."""
+        pass
+    
+    @abstractmethod
+    def _extract_tool_calls_and_outputs(self, result) -> tuple[list[ToolCall], list[ToolOutput]]:
+        """Extract tool calls and outputs from the agent's result."""
+        pass
+    
+    @abstractmethod
+    def _extract_tool_call(self, item) -> ToolCall:
+        """Extract tool call from a single item."""
+        pass
+    
+    @abstractmethod
+    def _extract_tool_output(self, item) -> ToolOutput:
+        """Extract tool output from a single item."""
+        pass
+    
+    @abstractmethod
+    def _create_and_store_usage(self, usage_id: str, context_id: str, task_id: str, 
+                               query: str, result, api_usage, tool_calls: list[ToolCall], 
+                               tool_outputs: list[ToolOutput]) -> Usage:
+        """Create and store usage information based on the agent's result."""
+        pass
+    
     def record_usage(self, usage: Usage) -> None:
         self._usage_logs[usage.usage_id] = usage
 

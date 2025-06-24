@@ -2,22 +2,24 @@
 # Hanldes the logic how to pass tasks to other agents
 import logging
 import asyncio
-from typing import AsyncGenerator, List
+from typing import AsyncGenerator, List, Optional
 from uuid import uuid4
 from a2a.server.tasks import TaskUpdater
-from a2a.types import Message, MessageSendParams, Part, TextPart, Role, TaskState, TaskStatus
+from a2a.types import Message, MessageSendParams, Part, TextPart, Role, TaskState, TaskStatus, Artifact
 from a2a.utils import new_agent_text_message
 from a2a.types import DataPart
 from a2a_mcp.common.base_agent.base_agent import ResponseFormat, BaseAgent, MessageSendParams
 from a2a_mcp.common.utils import append_message_metadata
 import json 
+from a2a_mcp.common.memory_management import MemoryManagement
 
 class TaskDelegator():
-    def __init__(self, updater: TaskUpdater, agent: BaseAgent, task_context_id: str) -> None:
+    def __init__(self, updater: TaskUpdater, agent: BaseAgent, task_context_id: str, memory: Optional[MemoryManagement] = None) -> None:
         # updater handles updating parent state and task, adding artifacts etc
         self.task_updater = updater
         self.agent = agent  # Store the agent for later use
         self.task_context_id = task_context_id
+        self.memory = memory
 
     async def delegate_task(self, response_obj: ResponseFormat):
         if response_obj.action != "call_next_agent":
@@ -74,6 +76,21 @@ class TaskDelegator():
                         )
                         message = append_message_metadata(message, {"agent_name": agent_name})
                         self.task_updater.update_status(TaskState.working, message)
+
+                        # --- Persist message to memory ---
+                        if self.memory:
+                            try:
+                                task_obj = await self.memory.get_task_by_context_and_id(
+                                    self.task_updater.context_id,
+                                    self.task_updater.task_id,
+                                )
+                                if task_obj is not None:
+                                    history = list(task_obj.history or [])
+                                    history.append(message)
+                                    task_obj.history = history  # type: ignore
+                                    await self.memory.save(task_obj)
+                            except Exception:
+                                pass
                     elif evt_kind == "status-update":
                         if event.get('status') :
                             task_status = event.get('status', None)
@@ -81,8 +98,13 @@ class TaskDelegator():
                                 message_status = task_status.message
                                 
                                 # Create proper message for task update
+                                root_part = message_status.parts[0].root if message_status.parts else None
+                                if hasattr(root_part, "text"):
+                                    root_text_val = getattr(root_part, "text")
+                                else:
+                                    root_text_val = str(root_part)
                                 message = new_agent_text_message(
-                                    event.get("content", str(message_status.parts[0].root.text)),
+                                    event.get("content", root_text_val),
                                     self.task_updater.context_id,
                                     self.task_updater.task_id,
                                 )
@@ -100,11 +122,40 @@ class TaskDelegator():
                                     metadata={"agent_name": agent_name}
                                     # additional fields eg id, metadata etc can be added
                                 )
+                                # persist artifact
+                                if self.memory:
+                                    try:
+                                        task_obj = await self.memory.get_task_by_context_and_id(
+                                            self.task_updater.context_id,
+                                            self.task_updater.task_id,
+                                        )
+                                        if task_obj is not None:
+                                            if isinstance(artifact, Artifact):
+                                                artifacts = list(task_obj.artifacts or [])  # type: ignore
+                                                artifacts.append(artifact)
+                                                task_obj.artifacts = artifacts  # type: ignore
+                                            await self.memory.save(task_obj)
+                                    except Exception:
+                                        pass
                             elif hasattr(artifact, 'parts'):
                                 self.task_updater.add_artifact(
                                     parts=artifact.parts,
                                     metadata={"agent_name": agent_name}
                                 )
+                                if self.memory:
+                                    try:
+                                        task_obj = await self.memory.get_task_by_context_and_id(
+                                            self.task_updater.context_id,
+                                            self.task_updater.task_id,
+                                        )
+                                        if task_obj is not None:
+                                            if isinstance(artifact, Artifact):
+                                                artifacts = list(task_obj.artifacts or [])  # type: ignore
+                                                artifacts.append(artifact)
+                                                task_obj.artifacts = artifacts  # type: ignore
+                                            await self.memory.save(task_obj)
+                                    except Exception:
+                                        pass
                     elif evt_kind == "error":
                         # Handle error events
                         error_message = new_agent_text_message(

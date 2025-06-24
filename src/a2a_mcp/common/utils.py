@@ -1,7 +1,7 @@
 # type: ignore
 import logging
 import os
-from typing import Dict, List, Any
+from typing import Dict, List, Any, Optional
 
 import google.generativeai as genai
 
@@ -73,7 +73,7 @@ def get_data_parts(parts: list[Part]) -> list[str]:
     return [json.dumps(part.root.data, ensure_ascii=False) for part in parts if isinstance(part.root, DataPart)]
 
 
-def get_message_data(message: Message, delimiter: str = '\n') -> str:
+def get_message_data(message: Optional[Message], delimiter: str = "\n") -> str:
     """Extracts and joins all data content from a Message's parts.
 
     Args:
@@ -83,6 +83,8 @@ def get_message_data(message: Message, delimiter: str = '\n') -> str:
     Returns:
         A single string containing all data content, or an empty string if no data parts are found.
     """
+    if not message:
+        return ""
     return delimiter.join(get_data_parts(message.parts))
 
 
@@ -97,6 +99,6 @@ def artifact_dict_to_parts(artifact_dict: Dict[str, Any]) -> List[Part]:
     """
     return [Part(root=TextPart(text=json.dumps(artifact_dict, indent=2, ensure_ascii=False)))]
 
-def append_message_metadata(msg: Message, new_meta: dict[str, Any]) -> None:
+def append_message_metadata(msg: Message, new_meta: dict[str, Any]) -> Message:
     msg.metadata = {**(msg.metadata or {}), **new_meta}
     return msg

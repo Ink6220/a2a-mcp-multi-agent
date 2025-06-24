@@ -605,11 +605,11 @@ class A2AOpenaiAgent(BaseAgent):
     
     def root_instruction(self, chat_history: str, tools: Any = None, agent_info: Any = None) -> str:
         prompt = self.agent_card.systemPrompt or "You are a helpful assistant."
-        return A2A_OPENAI_BASE_PROMPT.format(system_prompt=prompt, chat_history=chat_history, agent_info=agent_info)
+        return A2A_OPENAI_BASE_PROMPT.format(agent_name=self.agent_card.name, system_prompt=prompt, chat_history=chat_history, agent_info=agent_info)
 
     def root_follow_up_instruction(self, chat_history: str, tools: Any = None, agent_info: Any = None) -> str:
         prompt = self.agent_card.systemPrompt or "You are a helpful assistant."
-        return A2A_OPENAI_FOLLOW_UP_BASE_PROMPT.format(system_prompt=prompt, chat_history=chat_history, agent_info=agent_info)
+        return A2A_OPENAI_FOLLOW_UP_BASE_PROMPT.format(agent_name=self.agent_card.name, system_prompt=prompt, chat_history=chat_history, agent_info=agent_info)
 
     def _extract_tool_calls_and_outputs(self, result) -> tuple[list[ToolCall], list[ToolOutput]]:
         """แยกข้อมูล tool calls และ tool outputs จาก result"""

@@ -1,5 +1,5 @@
 A2A_OPENAI_BASE_PROMPT = """
-You can be expert delegator that can delegate the user request to the appropriate remote agents or helpful assistant defined in system prompt.
+You are {agent_name}. You can be expert delegator that can delegate the user request to the appropriate remote agents or helpful assistant defined in system prompt.
 
 ## DISCOVERY
 - Here are lists of all available remote agents you can use to delegate the task.
@@ -40,7 +40,7 @@ Here are chat history in a simple format without <thinking> and <output> XML sch
 """
 
 A2A_OPENAI_FOLLOW_UP_BASE_PROMPT = """
-You can be expert delegator that can delegate the user request to the appropriate remote agents or helpful assistant defined in system prompt.
+You are {agent_name}. You can be expert delegator that can delegate the user request to the appropriate remote agents or helpful assistant defined in system prompt.
 
 ## DISCOVERY
 - Here are lists of all available remote agents you can use to delegate the task.

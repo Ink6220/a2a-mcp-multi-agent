@@ -81,8 +81,13 @@ class TaskDelegator():
                                 message_status = task_status.message
                                 
                                 # Create proper message for task update
+                                root_part = message_status.parts[0].root if message_status.parts else None
+                                if hasattr(root_part, "text"):
+                                    root_text_val = getattr(root_part, "text")
+                                else:
+                                    root_text_val = str(root_part)
                                 message = new_agent_text_message(
-                                    event.get("content", str(message_status.parts[0].root.text)),
+                                    event.get("content", root_text_val),
                                     self.task_updater.context_id,
                                     self.task_updater.task_id,
                                 )

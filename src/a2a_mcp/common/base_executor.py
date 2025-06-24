@@ -25,7 +25,7 @@ from a2a.utils.errors import ServerError
 from a2a_mcp.common.task_delegator import TaskDelegator
 from a2a_mcp.common.base_agent.base_agent import BaseAgent, ResponseFormat
 from a2a_mcp.common.memory_management import MemoryManagement
-from a2a_mcp.common.utils import artifact_dict_to_parts
+from a2a_mcp.common.utils import artifact_dict_to_parts, get_message_data, append_message_metadata
 import logging
 import json
 import asyncio
@@ -88,7 +88,8 @@ class BaseAgentExecutor(AgentExecutor):
         print(f"🚀 Executing A2A-compliant agent: {self.agent.agent_name}")
         
         query = context.get_user_input()
-        print(f"📝 User Query: {query}")
+        incoming_data = get_message_data(context.message)
+        print(f"📝 User Query: {query+"\n"+incoming_data}")
         
         message = cast(Message, context.message)  # Safe cast after validation
         task = context.current_task or new_task(message)
@@ -109,6 +110,7 @@ class BaseAgentExecutor(AgentExecutor):
             task.contextId,
             task.id,
         )
+        working_message = append_message_metadata(working_message, {"agent_name": self.agent.agent_card.name})
         updater.update_status(TaskState.working, working_message)
 
         try:
@@ -125,19 +127,22 @@ class BaseAgentExecutor(AgentExecutor):
                     print(f"  Task {task_id}: {context_task.id}")
             print(f"\033[92m========================\033[0m")
             
+            # --- INITIAL INVOKE ---
             response = await self.agent.invoke(query, context_id, task_id, context_tasks)
             
             print(f"🤖 Agent Response: action={response.action}, status={response.status}")
             print(f"   Message: {response.message}")
 
             # Handle response based on action
-            if response.action == "call_next_agent":
+            # --- DELEGATION LOOP ---
+            while response.action == "call_next_agent":
                 print(f"🔄 Delegating to agent: {response.agent_name} (input_required)")
                 delegation_message = new_agent_text_message(
                     response.message,
                     task.contextId,
                     task.id,
                 )
+                delegation_message = append_message_metadata(delegation_message, {"agent_name": self.agent.agent_card.name})
                 updater.update_status(TaskState.input_required, delegation_message, final=False)
 
                 # Use TaskDelegator for delegation
@@ -153,14 +158,26 @@ class BaseAgentExecutor(AgentExecutor):
                 # TODO: Add second invoke call logic here
                 # TODO: Create function to piece together context etc from delegated agents
                 # look at simple_request_context_builder.py for reference
-                
-            elif response.status == "completed":
+
+                # --- FOLLOW-UP INVOKE ---
+                # The agent re-evaluates with the new observation
+                print("🤔 Agent is re-evaluating with new information...")
+                response = await self.agent.follow_up_invoke(
+                    query=query, # Pass original query for context
+                    context_id=context_id,
+                    task_id=task_id,
+                    context=context_tasks,
+                )
+                print(f"🤖 Agent Response after delegation: action={response.action}, status={response.status}")
+
+
+            if response.status == "completed":
                 if response.artifacts and isinstance(response.artifacts, dict):
                     parts = artifact_dict_to_parts(response.artifacts)
-                    updater.add_artifact(parts, name=f'{self.agent.agent_name}-result')
+                    updater.add_artifact(parts, name=f'{self.agent.agent_name}-result', metadata={"agent_name": self.agent.agent_card.name})
                 else:
                     part = Part(root=TextPart(text=response.message))
-                    updater.add_artifact([part], name=f'{self.agent.agent_name}-result')
+                    updater.add_artifact([part], name=f'{self.agent.agent_name}-result', metadata={"agent_name": self.agent.agent_card.name})
                 updater.complete()
                 
             elif response.status == "input_required" and response.action == "answer":
@@ -170,6 +187,7 @@ class BaseAgentExecutor(AgentExecutor):
                     task.contextId,
                     task.id,
                 )
+                input_message = append_message_metadata(input_message, {"agent_name": self.agent.agent_card.name})
                 updater.update_status(TaskState.input_required, input_message, final=True)
                 
             elif response.status == "failed":
@@ -179,6 +197,7 @@ class BaseAgentExecutor(AgentExecutor):
                     task.contextId,
                     task.id,
                 )
+                failed_message = append_message_metadata(failed_message, {"agent_name": self.agent.agent_card.name})
                 updater.update_status(TaskState.failed, failed_message, final=True)
                 
             else:
@@ -188,6 +207,7 @@ class BaseAgentExecutor(AgentExecutor):
                     task.contextId,
                     task.id,
                 )
+                working_message = append_message_metadata(working_message, {"agent_name": self.agent.agent_card.name})
                 updater.update_status(TaskState.working, working_message)
                 
         except Exception as e:
@@ -198,6 +218,7 @@ class BaseAgentExecutor(AgentExecutor):
                 task.contextId,
                 task.id,
             )
+            error_message = append_message_metadata(error_message, {"agent_name": self.agent.agent_card.name})
             updater.update_status(TaskState.failed, error_message, final=True)
 
     def _validate_request(self, context: RequestContext) -> Optional[InvalidParamsError]:

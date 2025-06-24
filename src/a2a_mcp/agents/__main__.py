@@ -21,7 +21,7 @@ from a2a_mcp.common.base_executor import BaseAgentExecutor
 from a2a_mcp.common.base_agent.a2a_agent_selector import A2AAgentSelector
 from a2a_mcp.common.base_mcp.filtered_mcp_server_sse import FilteredMCPServerSse
 from a2a_mcp.common.card_discovery import A2ACardDiscovery
-from a2a_mcp.common.prompts import PRESALE_PROMPT
+from a2a_mcp.common.prompts import PRESALE_PROMPT, PROMO_ADVISOR_PROMPT
 
 import os
 from dotenv import load_dotenv
@@ -38,6 +38,8 @@ def get_agent(agent_card: CustomAgentCard, card_discovery: A2ACardDiscovery, mcp
         # TODO: add systemprompt instruction into agent_card based on agent name, due to load agent card from .json -> cannot directly passing prompt and connot write multiple line of string into systemPrompt.
         if agent_card.name == "Presale Agent":
             agent_card.systemPrompt = PRESALE_PROMPT
+        elif agent_card.name == "PromoAdvisor Agent":
+            agent_card.systemPrompt = PROMO_ADVISOR_PROMPT
 
         return A2AAgentSelector(agent_card=agent_card, card_discovery=card_discovery, mcp_server=[mcp_server]).get_agent()
     except Exception as e:

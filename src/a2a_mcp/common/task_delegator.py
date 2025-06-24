@@ -5,10 +5,11 @@ import asyncio
 from typing import AsyncGenerator, List
 from uuid import uuid4
 from a2a.server.tasks import TaskUpdater
-from a2a.types import Message, MessageSendParams, Part, TextPart, Role, TaskState
+from a2a.types import Message, MessageSendParams, Part, TextPart, Role, TaskState, TaskStatus
 from a2a.utils import new_agent_text_message
 from a2a.types import DataPart
 from a2a_mcp.common.base_agent.base_agent import ResponseFormat, BaseAgent, MessageSendParams
+from a2a_mcp.common.utils import append_message_metadata
 import json 
 
 class TaskDelegator():
@@ -71,20 +72,38 @@ class TaskDelegator():
                             self.task_updater.context_id,
                             self.task_updater.task_id,
                         )
+                        message = append_message_metadata(message, {"agent_name": agent_name})
                         self.task_updater.update_status(TaskState.working, message)
+                    elif evt_kind == "status-update":
+                        if event.get('status') :
+                            task_status = event.get('status', None)
+                            if isinstance(task_status, TaskStatus) and task_status.message:
+                                message_status = task_status.message
+                                
+                                # Create proper message for task update
+                                message = new_agent_text_message(
+                                    event.get("content", str(message_status.parts[0].root.text)),
+                                    self.task_updater.context_id,
+                                    self.task_updater.task_id,
+                                )
+                                message = append_message_metadata(message, {"agent_name": agent_name})
+                                self.task_updater.update_status(TaskState.working, message)
                     elif evt_kind == "artifact-update":
                         artifact = event.get("artifact")
+                        
                         if artifact:
                             # Ensure proper type conversion
                             if isinstance(artifact, dict):
                                 parts = artifact.get('parts', [])
                                 self.task_updater.add_artifact(
                                     parts=parts,
+                                    metadata={"agent_name": agent_name}
                                     # additional fields eg id, metadata etc can be added
                                 )
                             elif hasattr(artifact, 'parts'):
                                 self.task_updater.add_artifact(
                                     parts=artifact.parts,
+                                    metadata={"agent_name": agent_name}
                                 )
                     elif evt_kind == "error":
                         # Handle error events
@@ -93,6 +112,7 @@ class TaskDelegator():
                             self.task_updater.context_id,
                             self.task_updater.task_id,
                         )
+                        error_message = append_message_metadata(error_message, {"agent_name": agent_name})
                         self.task_updater.update_status(TaskState.failed, error_message)
                     # Add more event types as needed
             except Exception as e:
@@ -102,6 +122,7 @@ class TaskDelegator():
                     self.task_updater.context_id,
                     self.task_updater.task_id,
                 )
+                error_message = append_message_metadata(error_message, {"agent_name": agent_name})
                 self.task_updater.update_status(TaskState.failed, error_message)
             finally:
                 streams_done[idx] = True

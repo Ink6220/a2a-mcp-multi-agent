@@ -73,7 +73,9 @@ async def simulate_starlette_request(agent, user_message: str):
     class EventCollector:
         def __init__(self):
             self.events = []
-        def enqueue_event(self, event):
+
+        async def enqueue_event(self, event):
+            """Mimic async EventQueue.enqueue_event signature used by SDK >=0.2.x"""
             self.events.append(event)
 
     event_collector = EventCollector()

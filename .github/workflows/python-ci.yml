@@ -21,7 +21,7 @@ jobs:
 
       - name: Run integration tests (OpenAI)
         env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }} 
         run: |
           if [ -z "$OPENAI_API_KEY" ]; then
             echo "::error::OPENAI_API_KEY secret is missing. Add it to the repository secrets to run integration tests.";

@@ -1,7 +1,7 @@
 {
     "name": "PromoAdvisor Agent",
     "description": "Present details, answer basic questions, log interest. Can only call this agent when customer tells that they available.",
-    "url": "http://localhost:10010/",
+    "url": "http://localhost:10002/",
     "provider": {
         "organization": "openai",
         "url":"None"

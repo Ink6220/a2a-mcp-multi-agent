@@ -122,40 +122,11 @@ class TaskDelegator():
                                     metadata={"agent_name": agent_name}
                                     # additional fields eg id, metadata etc can be added
                                 )
-                                # persist artifact
-                                if self.memory:
-                                    try:
-                                        task_obj = await self.memory.get_task_by_context_and_id(
-                                            self.task_updater.context_id,
-                                            self.task_updater.task_id,
-                                        )
-                                        if task_obj is not None:
-                                            if isinstance(artifact, Artifact):
-                                                artifacts = list(task_obj.artifacts or [])  # type: ignore
-                                                artifacts.append(artifact)
-                                                task_obj.artifacts = artifacts  # type: ignore
-                                            await self.memory.save(task_obj)
-                                    except Exception:
-                                        pass
                             elif hasattr(artifact, 'parts'):
                                 await self.task_updater.add_artifact(
                                     parts=artifact.parts,
                                     metadata={"agent_name": agent_name}
                                 )
-                                if self.memory:
-                                    try:
-                                        task_obj = await self.memory.get_task_by_context_and_id(
-                                            self.task_updater.context_id,
-                                            self.task_updater.task_id,
-                                        )
-                                        if task_obj is not None:
-                                            if isinstance(artifact, Artifact):
-                                                artifacts = list(task_obj.artifacts or [])  # type: ignore
-                                                artifacts.append(artifact)
-                                                task_obj.artifacts = artifacts  # type: ignore
-                                            await self.memory.save(task_obj)
-                                    except Exception:
-                                        pass
                     elif evt_kind == "error":
                         # Handle error events
                         error_message = new_agent_text_message(

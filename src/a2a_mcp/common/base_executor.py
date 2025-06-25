@@ -95,7 +95,7 @@ class BaseAgentExecutor(AgentExecutor):
         message = cast(Message, context.message)  # Safe cast after validation
         task = context.current_task or new_task(message)
         if not context.current_task:
-            event_queue.enqueue_event(task)
+            await event_queue.enqueue_event(task)
             await self.memory.save(task)
 
         task_id = task.id
@@ -112,7 +112,7 @@ class BaseAgentExecutor(AgentExecutor):
             task.id,
         )
         working_message = append_message_metadata(working_message, {"agent_name": self.agent.agent_card.name})
-        updater.update_status(TaskState.working, working_message)
+        await updater.update_status(TaskState.working, working_message)
 
         try:
             context_tasks = await self.memory.get_tasks_by_context(context_id)
@@ -144,7 +144,7 @@ class BaseAgentExecutor(AgentExecutor):
                     task.id,
                 )
                 delegation_message = append_message_metadata(delegation_message, {"agent_name": self.agent.agent_card.name})
-                updater.update_status(TaskState.input_required, delegation_message, final=False)
+                await updater.update_status(TaskState.input_required, delegation_message, final=False)
 
                 # Use TaskDelegator for delegation
                 if stream := await self.delegator.delegate_task(response,self.agent.agent_card.name):
@@ -175,11 +175,11 @@ class BaseAgentExecutor(AgentExecutor):
             if response.status == "completed":
                 if response.artifacts and isinstance(response.artifacts, dict):
                     parts = artifact_dict_to_parts(response.artifacts)
-                    updater.add_artifact(parts, name=f'{self.agent.agent_name}-result', metadata={"agent_name": self.agent.agent_card.name})
+                    await updater.add_artifact(parts, name=f'{self.agent.agent_name}-result', metadata={"agent_name": self.agent.agent_card.name})
                 else:
                     part = Part(root=TextPart(text=response.message))
-                    updater.add_artifact([part], name=f'{self.agent.agent_name}-result', metadata={"agent_name": self.agent.agent_card.name})
-                updater.complete()
+                    await updater.add_artifact([part], name=f'{self.agent.agent_name}-result', metadata={"agent_name": self.agent.agent_card.name})
+                await updater.complete()
                 
             elif response.status == "input_required" and response.action == "answer":
                 print("⏸️  Task paused - waiting for user input")
@@ -189,7 +189,7 @@ class BaseAgentExecutor(AgentExecutor):
                     task.id,
                 )
                 input_message = append_message_metadata(input_message, {"agent_name": self.agent.agent_card.name})
-                updater.update_status(TaskState.input_required, input_message, final=True)
+                await updater.update_status(TaskState.input_required, input_message, final=True)
                 
             elif response.status == "failed":
                 print("❌ Task failed")
@@ -199,7 +199,7 @@ class BaseAgentExecutor(AgentExecutor):
                     task.id,
                 )
                 failed_message = append_message_metadata(failed_message, {"agent_name": self.agent.agent_card.name})
-                updater.update_status(TaskState.failed, failed_message, final=True)
+                await updater.update_status(TaskState.failed, failed_message, final=True)
                 
             else:
                 print(f"🔄 Unknown status '{response.status}' - treating as working")
@@ -209,7 +209,7 @@ class BaseAgentExecutor(AgentExecutor):
                     task.id,
                 )
                 working_message = append_message_metadata(working_message, {"agent_name": self.agent.agent_card.name})
-                updater.update_status(TaskState.working, working_message)
+                await updater.update_status(TaskState.working, working_message)
                 
         except Exception as e:
             logger.error(f"Execution error: {e}")
@@ -220,7 +220,7 @@ class BaseAgentExecutor(AgentExecutor):
                 task.id,
             )
             error_message = append_message_metadata(error_message, {"agent_name": self.agent.agent_card.name})
-            updater.update_status(TaskState.failed, error_message, final=True)
+            await updater.update_status(TaskState.failed, error_message, final=True)
 
     def _validate_request(self, context: RequestContext) -> Optional[InvalidParamsError]:
         """Validate the incoming request.

@@ -46,6 +46,15 @@ class MockAgent:
             response_data: A dictionary of attributes for the ResponseFormat.
         """
         self.response_to_return = ResponseFormat(**response_data)
+        # Provide a minimal stub for ``agent_card`` expected by the real executor.
+        class _Card:
+            def __init__(self, name: str):
+                self.name = name
+
+        # Many production agents expose ``agent_card.name``. The executor we are
+        # testing relies on this attribute, so we replicate it here to avoid
+        # touching production code.
+        self.agent_card = _Card(getattr(self, "agent_name", "mock-agent"))
 
     async def invoke(
         self,
@@ -55,6 +64,18 @@ class MockAgent:
         context: Dict[str, Any] | None = None,
     ) -> ResponseFormat:
         """Return the pre-configured ResponseFormat regardless of inputs."""
+        return self.response_to_return
+
+    # Added to support the delegation flow where the executor calls
+    # ``follow_up_invoke`` after delegating to another agent.
+    async def follow_up_invoke(
+        self,
+        query: str,
+        context_id: str,
+        task_id: str | None = None,
+        context: Dict[str, Any] | None = None,
+    ) -> ResponseFormat:
+        """For testing, just echo the same response back."""
         return self.response_to_return
 
 # --- Pre-configured Mock Agents for Different Scenarios ---

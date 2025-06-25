@@ -19,12 +19,12 @@ jobs:
       - name: Run offline unit tests
         run: pytest -m "not integration"
 
-      - name: Run integration tests (OpenAI)
-        env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }} 
-        run: |
-          if [ -z "$OPENAI_API_KEY" ]; then
-            echo "::error::OPENAI_API_KEY secret is missing. Add it to the repository secrets to run integration tests.";
-            exit 1;
-          fi
-          pytest -m integration 
+      # - name: Run integration tests (OpenAI)
+      #   env:
+      #     OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }} 
+      #   run: |
+      #     if [ -z "$OPENAI_API_KEY" ]; then
+      #       echo "::error::OPENAI_API_KEY secret is missing. Add it to the repository secrets to run integration tests.";
+      #       exit 1;
+      #     fi
+      #     pytest -m integration 

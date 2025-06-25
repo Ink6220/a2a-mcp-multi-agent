@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 from typing import Any, Dict, Literal, Union, AsyncGenerator, Self, Optional, List
 from collections.abc import AsyncIterable
 from pydantic import BaseModel, Field, model_validator, ValidationError
-from a2a.types import MessageSendParams, AgentCard, Task
+from a2a.types import MessageSendParams, AgentCard, Task, TextPart, FilePart, DataPart
 from a2a_mcp.common.types import CustomAgentCard, AgentCard, ToolCall, ToolOutput
 from a2a_mcp.common.card_discovery import A2ACardDiscovery
 import json
@@ -69,6 +69,11 @@ class ResponseFormat(BaseModel):
 class ExtraUsage(BaseModel):
     reasoning_tokens: int
     cache_tokens: int
+
+class ApiUsage(BaseModel):
+    prompt_tokens: int | None
+    completion_tokens: int | None
+    extra_usage: ExtraUsage | None
 
 class Usage(BaseModel):
     usage_id: str
@@ -179,84 +184,76 @@ class BaseAgent(ABC):
         # print(context)
         # print(f"\n{Fore.CYAN}=========================={Style.RESET_ALL}")
 
+        #loop through each task in the context
         for task_id, task in context.items():
             lines.append(f"=== Task {task.id} ===")
-            if task.history:
+            
+            # task's tool
+            if hasattr(task, 'metadata') and task.metadata:
+                metadata = task.metadata
+                if metadata.get('tool_calls'):
+                    for i, tool_call in enumerate(metadata['tool_calls']):
+                        tool_name = tool_call.get('tool_name')
+                        arguments = tool_call.get('arguments')
+                        lines.append(f"Tool Call {i+1} - Name: {tool_name}, Arguments: {json.dumps(arguments, ensure_ascii=False)}")
+                if metadata.get('tool_outputs'):
+                    for i, tool_output in enumerate(metadata['tool_outputs']):
+                        output = tool_output.get('output')
+                        lines.append(f"Tool Result {i+1} - Output: {output}")
+            
+            # task's history
+            if hasattr(task,'history') and task.history:
                 for i, message in enumerate(task.history):
-                    if hasattr(message, 'kind') and message.kind == 'message':
-                        role = getattr(message, 'role', 'unknown')
-                        role_str = role.value if hasattr(role, 'value') else str(role)
-                        
-                        if hasattr(message, 'parts') and message.parts:
+                    if hasattr(message, 'kind'):
+                        role_str = message.role.value
+                        if hasattr(message, 'metadata') and message.metadata:
+                            agent_name = message.metadata.get('agent_name')
+                            if agent_name:
+                                role_str = agent_name
+                        if message.parts:
                             parts = []
                             for part in message.parts:
-                                # Part is a RootModel, access the actual content via .root
                                 if hasattr(part, 'root'):
                                     actual_part = part.root
-                                    if hasattr(actual_part, 'text'):
+                                    if isinstance(actual_part, TextPart):
                                         parts.append(actual_part.text)
-                                    elif hasattr(actual_part, 'data'):
-                                        parts.append(f"[Data: {json.dumps(actual_part.data)}]")
-                                    elif hasattr(actual_part, 'file'):
+                                    elif isinstance(actual_part, DataPart):
+                                        parts.append(f"[Data: {json.dumps(actual_part.data, ensure_ascii=False)}]")
+                                    elif isinstance(actual_part, FilePart):
                                         file_name = getattr(actual_part.file, 'name', 'unknown')
                                         parts.append(f"[File: {file_name}]")
                                     else:
                                         parts.append(str(actual_part))
-                                else:
-                                    # Fallback if part doesn't have root
-                                    if hasattr(part, 'text'):
-                                        parts.append(part.text)
-                                    else:
-                                        parts.append(str(part))
-                            
                             if parts:
-                                lines.append(f"{role_str}: {' '.join(parts)}")
+                                lines.append(f"{role_str.capitalize()}: {' '.join(parts)}")
                         else:
                             content = getattr(message, 'content', str(message))
                             lines.append(f"{role_str}: {content}")
-                
-                if hasattr(task, 'artifacts') and task.artifacts:
-                    print(f"  DEBUG: Found {len(task.artifacts)} artifacts")
-                    for artifact in task.artifacts:
-                        if hasattr(artifact, 'parts') and artifact.parts:
-                            agent_parts = []
-                            for part in artifact.parts:
-                                if hasattr(part, 'root'):
-                                    actual_part = part.root
-                                    if hasattr(actual_part, 'text'):
-                                        agent_parts.append(actual_part.text)
-                                    else:
-                                        agent_parts.append(str(actual_part))
+
+            # task's artifacts
+            if hasattr(task, 'artifacts') and task.artifacts:
+                for artifact in task.artifacts:
+                    if artifact.parts:
+                        artifact_parts = []
+                        for part in artifact.parts:
+                            if hasattr(part, 'root'):
+                                actual_part = part.root
+                                if isinstance(actual_part, TextPart):
+                                    artifact_parts.append(actual_part.text)
+                                elif isinstance(actual_part, DataPart):
+                                    artifact_parts.append(f"[Data: {json.dumps(actual_part.data)}]")
+                                elif isinstance(actual_part, FilePart):
+                                    file_name = getattr(actual_part.file, 'name', 'unknown')
+                                    artifact_parts.append(f"[File: {file_name}]")
                                 else:
-                                    if hasattr(part, 'text'):
-                                        agent_parts.append(part.text)
-                                    else:
-                                        agent_parts.append(str(part))
-                            
-                            if agent_parts:
-                                lines.append(f"agent: {' '.join(agent_parts)}")
-            
-            metadata = task.metadata
-            tool_calls = metadata.get('tool_calls', []) if metadata else []
-            tool_outputs = metadata.get('tool_outputs', []) if metadata else []
-
-            if tool_calls:
-                for i, tool_call in enumerate(tool_calls):
-                    if isinstance(tool_call, dict):
-                        tool_name = tool_call.get('tool_name', 'unknown')
-                        arguments = tool_call.get('arguments', {})
-                    else:
-                        tool_name = tool_call.tool_name
-                        arguments = tool_call.arguments
-                    lines.append(f"Tool Call {i+1} - Name: {tool_name}, Arguments: {json.dumps(arguments, ensure_ascii=False)}")
-
-            if tool_outputs:
-                for i, tool_output in enumerate(tool_outputs):
-                    if isinstance(tool_output, dict):
-                        output = tool_output.get('output', '')
-                    else:
-                        output = tool_output.output
-                    lines.append(f"Tool Result {i+1} - Output: {output}")
+                                    artifact_parts.append(str(actual_part))
+                        if artifact_parts:
+                            agent_role = "Agent"
+                            if hasattr(artifact, 'metadata') and artifact.metadata:
+                                agent_name = artifact.metadata.get('agent_name')
+                                if agent_name:
+                                    agent_role = agent_name
+                            lines.append(f"{agent_role}: {' '.join(artifact_parts)}")
             
             lines.append("")
         

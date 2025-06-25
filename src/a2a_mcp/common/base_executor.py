@@ -18,7 +18,8 @@ from a2a.types import (
     TextPart,
     DataPart,
     FilePart,
-    InvalidParamsError
+    InvalidParamsError,
+    Artifact
 )
 from a2a.utils import new_agent_text_message, new_task
 from a2a.utils.errors import ServerError
@@ -102,7 +103,7 @@ class BaseAgentExecutor(AgentExecutor):
         updater = TaskUpdater(event_queue, task_id, context_id)
 
         # Initialize TaskDelegator
-        self.delegator = TaskDelegator(updater, self.agent, context_id)
+        self.delegator = TaskDelegator(updater, self.agent, context_id, self.memory)
         
         # Initial working message
         working_message = new_agent_text_message(
@@ -146,7 +147,7 @@ class BaseAgentExecutor(AgentExecutor):
                 updater.update_status(TaskState.input_required, delegation_message, final=False)
 
                 # Use TaskDelegator for delegation
-                if stream := await self.delegator.delegate_task(response):
+                if stream := await self.delegator.delegate_task(response,self.agent.agent_card.name):
                     self.ongoing_tasks.append(stream)
                 
                 # Use TaskDelegator's stream management

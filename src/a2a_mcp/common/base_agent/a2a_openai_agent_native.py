@@ -1,5 +1,5 @@
-from a2a_mcp.common.base_agent.base_agent import BaseAgent, ResponseFormat, Usage, ExtraUsage
-from a2a_mcp.common.prompts import A2A_OPENAI_NATIVE_BASE_PROMPT
+from a2a_mcp.common.base_agent.base_agent import BaseAgent, ResponseFormat, Usage, ExtraUsage, ToolCall, ToolOutput, ApiUsage
+from a2a_mcp.common.prompts import A2A_OPENAI_NATIVE_BASE_PROMPT, A2A_OPENAI_NATIVE_FOLLOW_UP_BASE_PROMPT
 from agents import Agent, ModelSettings, Runner, ItemHelpers
 from openai.types.responses import ResponseTextDeltaEvent, ResponseFunctionToolCall, ResponseOutputMessage, ResponseOutputItemAddedEvent, ResponseFunctionCallArgumentsDeltaEvent
 from openai import AsyncOpenAI, OpenAIError
@@ -13,13 +13,26 @@ load_dotenv()
 import logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+from a2a.client import A2AClient
 from a2a_mcp.common.types import CustomAgentCard
+from a2a.types import (
+    AgentCard, 
+    MessageSendParams, 
+    SendMessageRequest, 
+    SendStreamingMessageRequest, 
+    JSONRPCErrorResponse,
+    Task,
+    Message
+)
 from a2a_mcp.common.card_discovery import A2ACardDiscovery
 import traceback
 import time
 from colorama import Fore, Style, init
 from openai import OpenAI, AsyncOpenAI
 from uuid import uuid4
+from typing import AsyncGenerator, List, Dict, Any
+import traceback
+import httpx
 
 class A2AOpenaiAgentNative(BaseAgent):
     def __init__(self, agent_card: CustomAgentCard, card_discovery: A2ACardDiscovery, mcp_server: list=[]):
@@ -44,12 +57,71 @@ class A2AOpenaiAgentNative(BaseAgent):
         )
         return instruction, client, assistant
 
-    async def invoke(self, query, context_id: str, task_id: str, history: str) -> ResponseFormat:
+    async def make_remote_agent_connection(
+        self,
+        target_agent_card: AgentCard, 
+        request: MessageSendParams
+    ) -> AsyncGenerator[dict, None]:
+        """Form a connection and stream messages to a remote agent, yielding events as they arrive."""
+        
+        async def _stream_connection():
+            async with httpx.AsyncClient(timeout=30) as httpx_client:
+                agent_client = A2AClient(httpx_client, target_agent_card)
+                
+                # Check if agent supports streaming
+                supports_streaming = (
+                    hasattr(target_agent_card, "capabilities") and 
+                    target_agent_card.capabilities and 
+                    getattr(target_agent_card.capabilities, "streaming", False)
+                )
+                
+                if supports_streaming:
+                    # Stream from streaming agent
+                    async for response in agent_client.send_message_streaming(
+                        SendStreamingMessageRequest(id=str(uuid4()), params=request)
+                    ):
+                        if isinstance(response.root, JSONRPCErrorResponse):
+                            yield {"kind": "error", "error": str(response.root)}
+                            return
+                        
+                        if hasattr(response.root, 'result') and response.root.result:
+                            event = response.root.result
+                            # Convert to dict for consistency
+                            if hasattr(event, '__dict__'):
+                                yield event.__dict__
+                            else:
+                                # Fallback – treat as generic message event
+                                yield {"kind": "message", "content": str(event)}
+                        else:
+                            yield {"kind": "error", "error": "Empty response"}
+                            return
+                else:
+                    # Handle non-streaming agent
+                    response = await agent_client.send_message(
+                        SendMessageRequest(id=str(uuid4()), params=request)
+                    )
+                    
+                    if isinstance(response.root, JSONRPCErrorResponse):
+                        yield {"kind": "error", "error": str(response.root)}
+                    else:
+                        result = response.root.result
+                        if hasattr(result, '__dict__'):
+                            yield result.__dict__
+                        else:
+                            yield {"kind": "message", "content": str(result)}
+        
+        return _stream_connection()
+
+
+
+    async def invoke(self, query: str, context_id: str, task_id: str, context: Dict[str, Task]) -> ResponseFormat:
         try:
             usage_id = str(uuid4())
-            # history = "" # TODO: Load Memory
+            history = self.postprocess(context)
             agent_info = self.card_discovery.get_remote_agent_info()
             instruction = self.root_instruction(chat_history=history, agent_info=agent_info)
+            print(Fore.BLUE + Style.BRIGHT + instruction + Style.RESET_ALL)
+
             session = self.mcp_server[0]
             tools_result = await session.list_tools()
             tools_list = [{"name": tool.name, "description": tool.description,
@@ -65,6 +137,8 @@ class A2AOpenaiAgentNative(BaseAgent):
                 "reasoning_tokens": 0
             }
 
+            tool_calls: List[ToolCall] = []
+            tool_outputs: List[ToolCall] = []
             input_messages = [{"role": "user", "content": query}]
             is_continue = True # True while agent calling tools, False after agent try to answer
             while is_continue:
@@ -98,6 +172,11 @@ class A2AOpenaiAgentNative(BaseAgent):
                             "call_id": tool_call.call_id,
                             "output": str(tool_response)
                         })
+
+                        # --- Custom Tool logs --- #
+                        tool_calls.append(ToolCall(tool_name=name, arguments=args))
+                        tool_outputs.append(ToolOutput(output=str(tool_response.content[0].text)))
+
                     else:
                         is_continue = False
                         break
@@ -107,28 +186,175 @@ class A2AOpenaiAgentNative(BaseAgent):
             response_object = self.parse_structure_output(output_message[0].content[0].text)
             print(output_message[0].content[0].text)
 
-            # TODO: Shold we save conversation history here ? 
-
-            usage = Usage(
-                usage_id=usage_id,
-                context_id=context_id,
-                task_id=task_id,
-                model_name=self.model_name,
-                user_input=query,
-                output=response_object,
-                prompt_tokens=api_usage['prompt_tokens'],
-                completion_tokens=api_usage['completion_tokens'],
-                extra_usage=ExtraUsage(reasoning_tokens=api_usage['reasoning_tokens'], cache_tokens=api_usage['cached_tokens'])
-            )
-            self.record_usage(usage)
-            print(usage)
-
+            # Save tool calls and outputs to current task in context
+            if tool_calls or tool_outputs:
+                if task_id in context:
+                    current_task = context[task_id]
+                    if not hasattr(current_task, 'metadata') or current_task.metadata is None:
+                        current_task.metadata = {}
+                    
+                    if tool_calls:
+                        current_task.metadata['tool_calls'] = [
+                            {"tool_name": tc.tool_name, "arguments": tc.arguments} 
+                            for tc in tool_calls
+                        ]
+                    if tool_outputs:
+                        current_task.metadata['tool_outputs'] = [
+                            {"output": to.output} 
+                            for to in tool_outputs
+                        ]
+            
+            # Create and store Usage
+            self._create_and_store_usage(
+                    usage_id=usage_id,
+                    context_id=context_id,
+                    task_id=task_id,
+                    query=query,
+                    result=response_object,
+                    api_usage=ApiUsage(
+                        prompt_tokens=api_usage['prompt_tokens'],
+                        completion_tokens=api_usage['completion_tokens'],
+                        extra_usage=None
+                    ),
+                    tool_calls=tool_calls,
+                    tool_outputs=tool_outputs            
+                )
+            
+            return response_object
 
         except OpenAIError as e:
             traceback.print_exc()
             print(e)
+            return ResponseFormat(
+                action="answer",
+                status="input_required",
+                custom_status="",
+                message="We are unable to process your request at the moment. Please try again. {e}",
+                agent_name=None,
+                next_agent_instruction=None,
+                artifacts=None
+            )
 
-        return response_object
+    async def follow_up_invoke(self, query: str, context_id: str, task_id: str, context: Dict[str, Task]) -> ResponseFormat:
+        try:
+            usage_id = str(uuid4())
+            history = self.postprocess(context)
+            agent_info = self.card_discovery.get_remote_agent_info()
+            instruction = self.root_follow_up_instruction(chat_history=history, agent_info=agent_info)
+            print(Fore.BLUE + instruction + Style.RESET_ALL)
+
+            session = self.mcp_server[0]
+            tools_result = await session.list_tools()
+            tools_list = [{"name": tool.name, "description": tool.description,
+                            "inputSchema": tool.inputSchema} for tool in tools_result]
+            start_time = time.time()
+            client = AsyncOpenAI()
+            
+            tools = self.convert_tool_format(tools_result)
+            api_usage = {
+                "prompt_tokens": 0,
+                "completion_tokens": 0,
+                "cached_tokens": 0,
+                "reasoning_tokens": 0
+            }
+
+            tool_calls: List[ToolCall] = []
+            tool_outputs: List[ToolCall] = []
+            input_messages = [{"role": "user", "content": query}]
+            is_continue = True # True while agent calling tools, False after agent try to answer
+            while is_continue:
+                print("\n\n")
+                response = await client.responses.create(
+                    instructions=instruction,
+                    model=self.model_name,
+                    input=input_messages,
+                    tools=tools,
+                    tool_choice='auto',
+                    temperature=0
+                )
+                print(json.dumps(response.model_dump(), indent=2, ensure_ascii=False))
+                api_usage["prompt_tokens"] += response.usage.input_tokens
+                api_usage["completion_tokens"] += response.usage.output_tokens
+                api_usage["cached_tokens"] += response.usage.input_tokens_details.cached_tokens
+                api_usage["reasoning_tokens"] += response.usage.output_tokens_details.reasoning_tokens
+
+
+                output_message = response.output
+                for tool_call in output_message:
+                    if isinstance(tool_call, ResponseFunctionToolCall):
+                        args = json.loads(tool_call.arguments)
+                        name = tool_call.name
+                        print(f"Calling tool {name} with {args}")
+                        tool_response = await session.call_tool(name, args)
+
+                        input_messages.append(tool_call)  # append model's function call message
+                        input_messages.append({                               # append result message
+                            "type": "function_call_output",
+                            "call_id": tool_call.call_id,
+                            "output": str(tool_response)
+                        })
+
+                        # --- Custom Tool logs --- #
+                        tool_calls.append(ToolCall(tool_name=name, arguments=args))
+                        tool_outputs.append(ToolOutput(output=str(tool_response.content[0].text)))
+
+                    else:
+                        is_continue = False
+                        break
+                
+            print(Fore.GREEN + Style.BRIGHT + "[Runner.run]:" + Style.RESET_ALL, time.time() - start_time)
+            print("\n\n")
+            response_object = self.parse_structure_output(output_message[0].content[0].text)
+            print(output_message[0].content[0].text)
+
+            # Save tool calls and outputs to current task in context
+            if tool_calls or tool_outputs:
+                if task_id in context:
+                    current_task = context[task_id]
+                    if not hasattr(current_task, 'metadata') or current_task.metadata is None:
+                        current_task.metadata = {}
+                    
+                    if tool_calls:
+                        current_task.metadata['tool_calls'] = [
+                            {"tool_name": tc.tool_name, "arguments": tc.arguments} 
+                            for tc in tool_calls
+                        ]
+                    if tool_outputs:
+                        current_task.metadata['tool_outputs'] = [
+                            {"output": to.output} 
+                            for to in tool_outputs
+                        ]
+            
+            # Create and store Usage
+            self._create_and_store_usage(
+                    usage_id=usage_id,
+                    context_id=context_id,
+                    task_id=task_id,
+                    query=query,
+                    result=response_object,
+                    api_usage=ApiUsage(
+                        prompt_tokens=api_usage['prompt_tokens'],
+                        completion_tokens=api_usage['completion_tokens'],
+                        extra_usage=None
+                    ),
+                    tool_calls=tool_calls,
+                    tool_outputs=tool_outputs            
+                )
+            
+            return response_object
+
+        except OpenAIError as e:
+            traceback.print_exc()
+            print(e)
+            return ResponseFormat(
+                action="answer",
+                status="input_required",
+                custom_status="",
+                message="We are unable to process your request at the moment. Please try again. {e}",
+                agent_name=None,
+                next_agent_instruction=None,
+                artifacts=None
+            )
 
     async def stream(self, query, sessionId) -> AsyncIterable[Dict[str, Any]]:
 
@@ -421,4 +647,53 @@ class A2AOpenaiAgentNative(BaseAgent):
 
     def root_instruction(self, chat_history, tools=None, agent_info=None):
         prompt = self.agent_card.systemPrompt or "You are a helpful assistant."
-        return A2A_OPENAI_NATIVE_BASE_PROMPT.format(system_prompt=prompt, chat_history=chat_history, agent_info=agent_info)
+        return A2A_OPENAI_NATIVE_BASE_PROMPT.format(agent_name=self.agent_card.name, system_prompt=prompt, chat_history=chat_history, agent_info=agent_info)
+
+    def root_follow_up_instruction(self, chat_history: str, tools: Any = None, agent_info: Any = None) -> str:
+        prompt = self.agent_card.systemPrompt or "You are a helpful assistant."
+        return A2A_OPENAI_NATIVE_FOLLOW_UP_BASE_PROMPT.format(agent_name=self.agent_card.name, system_prompt=prompt, chat_history=chat_history, agent_info=agent_info)
+
+    def _create_and_store_usage(self, usage_id: str, context_id: str, task_id: str, 
+                               query: str, result: ResponseFormat, api_usage: ApiUsage, tool_calls: list[ToolCall], 
+                               tool_outputs: list[ToolOutput]) -> Usage:
+        usage = Usage(
+            usage_id=usage_id,
+            context_id=context_id,
+            task_id=task_id,
+            model_name=self.model_name,
+            user_input=query,
+            output=result,
+            prompt_tokens=api_usage.prompt_tokens,
+            completion_tokens=api_usage.completion_tokens,
+            extra_usage=api_usage.extra_usage,
+            tool_calls=tool_calls if tool_calls else None,
+            tool_outputs=tool_outputs if tool_outputs else None
+        )
+
+        self.record_usage(usage)
+        
+        # Print usage details
+        print(f"\n{Fore.MAGENTA}=== USAGE DETAILS ==={Style.RESET_ALL}")
+        print(f"Usage ID: {usage.usage_id}")
+        print(f"Context ID: {usage.context_id}")
+        print(f"Task ID: {usage.task_id}")
+        print(f"Model: {usage.model_name}")
+        print(f"Prompt Tokens: {usage.prompt_tokens}")
+        print(f"Completion Tokens: {usage.completion_tokens}")
+        if usage.extra_usage:
+            print(f"Reasoning Tokens: {usage.extra_usage.reasoning_tokens}")
+            print(f"Cache Tokens: {usage.extra_usage.cache_tokens}")
+        if usage.tool_calls:
+            print(f"Tool Calls: {len(usage.tool_calls)}")
+            for i, tool_call in enumerate(usage.tool_calls):
+                print(f"  [{i+1}] {tool_call.tool_name}: {tool_call.arguments}")
+        if usage.tool_outputs:
+            print(f"Tool Outputs: {len(usage.tool_outputs)}")
+        print(f"{Fore.MAGENTA}==================={Style.RESET_ALL}\n")
+
+    def _extract_tool_calls_and_outputs(self, result) -> tuple[list[ToolCall], list[ToolOutput]]:
+        pass
+    def _extract_tool_call(self, item) -> ToolCall:
+        pass
+    def _extract_tool_output(self, item) -> ToolOutput:
+        pass

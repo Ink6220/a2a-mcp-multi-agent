@@ -21,7 +21,7 @@ class TaskDelegator():
         self.task_context_id = task_context_id
         self.memory = memory
 
-    async def delegate_task(self, response_obj: ResponseFormat):
+    async def delegate_task(self, response_obj: ResponseFormat, sender_name: str):
         if response_obj.action != "call_next_agent":
             # Not a delegation action, nothing to do
             return None
@@ -46,6 +46,7 @@ class TaskDelegator():
                 messageId=str(uuid4()),
                 taskId=task_id,
                 contextId=self.task_context_id,
+                metadata={"agent_name": sender_name},
                 parts=[Part(root=TextPart(text=instruction)), Part(root=DataPart(data=artifacts))],
                 role=Role.agent,
             ),

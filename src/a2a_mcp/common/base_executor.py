@@ -147,7 +147,7 @@ class BaseAgentExecutor(AgentExecutor):
                 updater.update_status(TaskState.input_required, delegation_message, final=False)
 
                 # Use TaskDelegator for delegation
-                if stream := await self.delegator.delegate_task(response):
+                if stream := await self.delegator.delegate_task(response,self.agent.agent_card.name):
                     self.ongoing_tasks.append(stream)
                 
                 # Use TaskDelegator's stream management

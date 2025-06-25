@@ -1,0 +1,52 @@
+{
+  "name": "Guide Agent",
+  "description": "Helps plan trips by gathering and saving user requirements.",
+  "url": "http://localhost:10110/",
+  "provider": {
+    "organization": "openai",
+    "url": "None"
+  },
+  "version": "1.0.0",
+  "documentationUrl": null,
+  "capabilities": {
+    "streaming": "True",
+    "pushNotifications": "False",
+    "stateTransitionHistory": "False"
+  },
+  "authentication": {
+    "credentials": null,
+    "schemes": [
+      "public"
+    ]
+  },
+  "defaultInputModes": [
+    "text",
+    "text/plain"
+  ],
+  "defaultOutputModes": [
+    "text",
+    "text/plain"
+  ],
+  "skills": [
+    {
+      "id": "save_requirements",
+      "name": "Save Requirements Tool",
+      "description": "Ask user about their requirements for trip and save them for future reference.",
+      "tags": [
+        "requirements",
+        "save"
+      ],
+      "examples": [
+        "คุณต้องการไปที่ไหน? กี่วัน? มีกิจกรรมอะไรที่คุณสนใจบ้าง?"
+      ],
+      "inputModes": null,
+      "outputModes": null
+    }
+  ],
+  "modelName": "gpt-4.1-mini",
+  "systemPrompt": "",
+  "nextAgent": [
+    "http://localhost:10102/",
+    "http://localhost:10103/"
+  ]
+}

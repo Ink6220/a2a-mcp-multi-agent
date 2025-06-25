@@ -1,0 +1,53 @@
+
+{
+  "name": "Plan Agent",
+  "description": "Generates detailed trip plans based on user input.",
+  "url": "http://localhost:10102/",
+  "provider": {
+    "organization": "openai",
+    "url": "None"
+  },
+  "version": "1.0.0",
+  "documentationUrl": null,
+  "capabilities": {
+    "streaming": "True",
+    "pushNotifications": "False",
+    "stateTransitionHistory": "False"
+  },
+  "authentication": {
+    "credentials": null,
+    "schemes": [
+      "public"
+    ]
+  },
+  "defaultInputModes": [
+    "text",
+    "text/plain"
+  ],
+  "defaultOutputModes": [
+    "text",
+    "text/plain"
+  ],
+  "skills": [
+    {
+      "id": "plan_trip_data",
+      "name": "Plan Trip Tool",
+      "description": "Plan a trip by following user's requirements.",
+      "tags": [
+        "Plan",
+        "Trip",
+        "Travel"
+      ],
+      "examples": [
+        "ช่วยวางแผนการเดินทางไปยังกรุงเทพฯ ในช่วงฤดูร้อนสำหรับ 5 วัน โดยมีกิจกรรมท่องเที่ยวและช้อปปิ้ง"
+      ],
+      "inputModes": null,
+      "outputModes": null
+    }
+  ],
+  "modelName": "gpt-4.1-mini",
+  "systemPrompt": "",
+  "nextAgent": [
+    "http://localhost:10110/"
+  ]
+}

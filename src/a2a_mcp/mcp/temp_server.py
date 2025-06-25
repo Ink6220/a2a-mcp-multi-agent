@@ -279,4 +279,107 @@ def serve(host, port, transport):  # noqa: PLR0915
     logger.info(
         f'Agent cards MCP Server at {host}:{port} and transport {transport}'
     )
+    
+    @mcp.tool()
+    def search_serpapi(query: str) -> dict:
+        """This tool is used to search for information using the SERPAPI service.
+        It caches queries to avoid repeated API calls for the same search term.
+        """
+        tool_name = "search_serpapi"
+        input_key = query
+        thread_id = "default"  # You can replace this with a dynamic ID per user if available
+        SERP_API_KEY = os.getenv("SERP_API_KEY")
+        try:
+            response = requests.get("https://serpapi.com/search", params={"q": query, "api_key": SERP_API_KEY})
+            if response.status_code == 200:
+                hits = response.json().get("organic_results", [])
+                print("\nSearch success\n")
+                result = {
+                    "status": "ok",
+                    "results": hits
+                }
+
+                return result
+            else:
+                print(f"Error: {response.status_code} - {response.text}")
+                return {
+                    "status": "error",
+                    "message": "ไม่สามารถเข้าถึง SERPAPI ได้ในขณะนี้"
+                }
+        except Exception as e:
+            print(f"Exception: {e}")
+            return {
+                "status": "error",
+                "message": "ไม่สามารถค้นหาข้อมูลจากอินเทอร์เน็ตได้ในขณะนี้"
+            }
+        
+    @mcp.tool()
+    def search_flights_tool(origin: str, destination: str, outbound_date: str, return_date: str = None) -> dict:
+        """Search for flights using SerpAPI Google Flights."""
+        tool_name = "search_flights_tool"
+        input_key = f"{origin}-{destination}-{outbound_date}-{return_date or ''}"
+        thread_id = "default"  # Replace with dynamic user/thread ID if needed
+        SERP_API_KEY = os.getenv("SERP_API_KEY")
+
+        # Prepare request parameters
+        params = {
+            "engine": "google_flights",
+            "hl": "en",
+            "gl": "us",
+            "api_key": SERP_API_KEY,
+            "departure_id": origin.strip().upper(),
+            "arrival_id": destination.strip().upper(),
+            "outbound_date": outbound_date,
+            "currency": "USD",
+            "type": "1" if return_date else "2"
+        }
+        if return_date:
+            params["return_date"] = return_date
+
+        try:
+            response = requests.get("https://serpapi.com/search", params=params)
+            if response.status_code == 200:
+                print("\nsearch_flight_complete\n")
+                data = response.json()
+                hits = data.get("best_flights", [])
+                # Format results
+                formatted = []
+                for flight in hits:
+                    legs = flight.get("flights", []) or []
+                    if not legs:
+                        continue
+                    first = legs[0]
+                    # Departure info
+                    dep = first.get("departure_airport", {})
+                    departure = (
+                        f"{dep.get('name','Unknown')} ({dep.get('id','??')}) at {dep.get('time','N/A')}"
+                        if isinstance(dep, dict) else first.get("departure_time", "Unknown")
+                    )
+                    # Arrival info
+                    arr = first.get("arrival_airport", {})
+                    arrival = (
+                        f"{arr.get('name','Unknown')} ({arr.get('id','??')}) at {arr.get('time','N/A')}"
+                        if isinstance(arr, dict) else first.get("arrival_time", "Unknown")
+                    )
+                    formatted.append({
+                        "airline": first.get("airline", "Unknown Airline"),
+                        "price": str(flight.get("price", "N/A")),
+                        "duration": f"{flight.get('total_duration','N/A')} min",
+                        "stops": "Nonstop" if len(legs) == 1 else f"{len(legs)-1} stop(s)",
+                        "departure": departure,
+                        "arrival": arrival,
+                        "travel_class": first.get("travel_class", "Economy"),
+                        "airline_logo": first.get("airline_logo", "")
+                    })
+                print("\nSearch success\n")
+                return {"status": "ok", "data": formatted}
+            else:
+                print(f"Error: {response.status_code} - {response.text}")
+                return {"status": "error", "message": "ไม่สามารถค้นหาสายการบินได้ในขณะนี้"}
+        except Exception as e:
+            print(f"Exception: {e}")
+            return {"status": "error", "message": "เกิดข้อผิดพลาดระหว่างค้นหาเที่ยวบิน"}
+
+
+
     mcp.run(transport=transport)

@@ -186,6 +186,64 @@ async def completeTask(
                 )
             )
             taskResult = taskResult.root.result
+                
+        if taskResult:
+            print("\n" + "="*10 + " Conversation Summary " + "="*10)
+            for entry in taskResult.history:
+                # 1) determine who spoke
+                meta = getattr(entry, "metadata", {}) or {}
+                if meta.get("agent_name"):
+                    role = meta["agent_name"]
+                else:
+                    # entry.role is e.g. Role.user or Role.agent
+                    role = getattr(entry.role, "name", str(entry.role))
+
+                # 2) pull every piece of text they sent
+                # no filtering on kind—just grab .text if it exists
+                texts = [p.text for p in entry.parts if hasattr(p, "text")]
+                text = " ".join(texts).strip()
+                print(f"[{role}] {text}")
+
+            # (optional) if you also want final artifacts in the same way:
+            if getattr(taskResult, "artifacts", None):
+                print("\n" + "="*10 + " Final Response " + "="*10)
+                for art in taskResult.artifacts:
+                    agent = art.metadata.get("agent_name", "unknown")
+                    texts = [p.text for p in art.parts if hasattr(p, "text")]
+                    text  = " ".join(texts).strip()
+                    print(f"[{agent}] {text}")
+
+            print("="*36 + "\n")
+
+            # ─── Finally, show the very last agent reply ───
+            agent_entries = [e for e in taskResult.history if getattr(e, "role", None).name == "agent"]
+            last_history_agent = agent_entries[-1] if agent_entries else None
+
+            # Try to get agent reply from status-update (if available)
+            status_message = getattr(getattr(taskResult, "status", None), "message", None)
+            last_agent_message = None
+
+            if status_message and getattr(status_message, "role", None) and status_message.role.name == "agent":
+                last_agent_message = status_message
+            elif last_history_agent:
+                last_agent_message = last_history_agent
+
+            if last_agent_message:
+                meta = getattr(last_agent_message, "metadata", {}) or {}
+                agent_name = meta.get("agent_name", "unknown")
+                texts = [p.text for p in last_agent_message.parts if hasattr(p, "text") and getattr(p, "text", None)]
+                files = [p.file.name for p in last_agent_message.parts if hasattr(p, "file") and getattr(p, "file", None)]
+                last_text = " ".join(texts).strip()
+                if not last_text and files:
+                    last_text = f"(File(s) attached: {', '.join(files)})"
+                if not last_text:
+                    last_text = "(No text response from agent)"
+
+                print("\n" + "-"*5 + " Last Agent Response " + "-"*5)
+                print(f"[{agent_name}] {last_agent_message.model_dump_json(exclude_none=True)}")
+                print("-"*34 + "\n")
+
+        return True, contextId, taskId
     else:
         try:
             # For non-streaming, assume the response is a task or message.
@@ -243,6 +301,8 @@ async def completeTask(
             )
         ## task is complete
         return True, contextId, taskId
+    
+
     ## Failure case, shouldn't reach
     return True, contextId, taskId
 

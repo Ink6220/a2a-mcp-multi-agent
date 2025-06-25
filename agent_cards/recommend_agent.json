@@ -1,0 +1,54 @@
+{
+  "name": "Recommend Agent",
+  "description": "Researches and recommends attractions, hotels, and flights per user interests.",
+  "url": "http://localhost:10103/",
+  "provider": {
+    "organization": "openai",
+    "url": "None"
+  },
+  "version": "1.0.0",
+  "documentationUrl": null,
+  "capabilities": {
+    "streaming": "True",
+    "pushNotifications": "False",
+    "stateTransitionHistory": "False"
+  },
+  "authentication": {
+    "credentials": null,
+    "schemes": [
+      "public"
+    ]
+  },
+  "defaultInputModes": [
+    "text",
+    "text/plain"
+  ],
+  "defaultOutputModes": [
+    "text",
+    "text/plain"
+  ],
+  "skills": [
+    {
+      "id": "recommendation_skill",
+      "name": "Recommendation Skill",
+      "description": "ค้นหาและแนะนำสถานที่ท่องเที่ยว,ข้อมูลโรงแรม และเที่ยวบินที่เหมาะสมกับความสนใจของผู้ใช้",
+      "tags": [
+        "การท่องเที่ยว",
+        "เที่ยวบิน",
+        "ตั๋วเครื่องบิน"
+      ],
+      "examples": [
+        "แนะนำสถานที่ท่องเที่ยวในกรุงเทพฯ",
+        "หาเที่ยวบินไปเชียงใหม่"
+      ],
+      "inputModes": null,
+      "outputModes": null
+    }
+  ],
+  "modelName": "gpt-4.1-mini",
+  "systemPrompt": "",
+  "nextAgent": [
+    "http://localhost:10102/",
+    "http://localhost:10110/"
+  ]
+}

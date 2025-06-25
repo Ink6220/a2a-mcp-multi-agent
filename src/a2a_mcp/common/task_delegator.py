@@ -77,20 +77,6 @@ class TaskDelegator():
                         message = append_message_metadata(message, {"agent_name": agent_name})
                         await self.task_updater.update_status(TaskState.working, message)
 
-                        # --- Persist message to memory ---
-                        if self.memory:
-                            try:
-                                task_obj = await self.memory.get_task_by_context_and_id(
-                                    self.task_updater.context_id,
-                                    self.task_updater.task_id,
-                                )
-                                if task_obj is not None:
-                                    history = list(task_obj.history or [])
-                                    history.append(message)
-                                    task_obj.history = history  # type: ignore
-                                    await self.memory.save(task_obj)
-                            except Exception:
-                                pass
                     elif evt_kind == "status-update":
                         if event.get('status') :
                             task_status = event.get('status', None)

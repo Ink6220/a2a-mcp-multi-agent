@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 from typing import Any, Dict, Literal, Union, AsyncGenerator, Self, Optional, List
 from collections.abc import AsyncIterable
 from pydantic import BaseModel, Field, model_validator, ValidationError
-from a2a.types import MessageSendParams, AgentCard, Task, TextPart,FilePart, DataPart
+from a2a.types import MessageSendParams, AgentCard, Task, TextPart, FilePart, DataPart
 from a2a_mcp.common.types import CustomAgentCard, AgentCard, ToolCall, ToolOutput
 from a2a_mcp.common.card_discovery import A2ACardDiscovery
 import json
@@ -218,7 +218,7 @@ class BaseAgent(ABC):
                                     if isinstance(actual_part, TextPart):
                                         parts.append(actual_part.text)
                                     elif isinstance(actual_part, DataPart):
-                                        parts.append(f"[Data: {json.dumps(actual_part.data)}]")
+                                        parts.append(f"[Data: {json.dumps(actual_part.data, ensure_ascii=False)}]")
                                     elif isinstance(actual_part, FilePart):
                                         file_name = getattr(actual_part.file, 'name', 'unknown')
                                         parts.append(f"[File: {file_name}]")

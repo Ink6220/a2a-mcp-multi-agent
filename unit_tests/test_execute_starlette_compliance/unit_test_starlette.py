@@ -7,12 +7,24 @@ for Starlette integration using ResponseFormat objects from agents.
 
 import asyncio
 import json
+import sys
+from pathlib import Path
 from typing import Dict, Any
 from unittest.mock import Mock, AsyncMock
 from uuid import uuid4
 
+# ---------------------------------------------------------------------------
+# Ensure project root is on sys.path when running this file directly.
+# This makes absolute imports like ``unit_tests.test_execute_starlette_compliance``
+# work whether the file is executed via `pytest` (which already adds the project
+# root) or via `python unit_test_starlette.py` from this directory.
+# ---------------------------------------------------------------------------
+project_root = Path(__file__).resolve().parents[2]
+if str(project_root) not in sys.path:
+    sys.path.insert(0, str(project_root))
+
 # Import our mock agents (only these are mocked - they return ResponseFormat objects)
-from mock_agent import (
+from unit_tests.test_execute_starlette_compliance.mock_agent import (
     get_completion_agent, 
     get_input_required_agent, 
     get_delegation_agent, 
@@ -69,6 +81,20 @@ async def simulate_starlette_request(agent, user_message: str):
     # Instantiate the real BaseAgentExecutor with in-memory task store
     memory_manager = MemoryManagement()
     executor = BaseAgentExecutor(agent, memory_manager)
+
+    # Ensure the provided agent exposes attributes expected by the real executor
+    if not hasattr(agent, "agent_card"):
+        class _TempCard:
+            def __init__(self, name: str):
+                self.name = name
+        agent.agent_card = _TempCard(getattr(agent, "agent_name", agent.__class__.__name__))  # type: ignore[attr-defined]
+
+    # Some executor code may rely on ``card_discovery`` attribute when handling
+    # delegation. We provide a harmless stub to avoid AttributeErrors without
+    # modifying production code.
+    if not hasattr(agent, "card_discovery"):
+        agent.card_discovery = None  # type: ignore[attr-defined]
+
     await executor.execute(context, event_collector)  # type: ignore[arg-type]
     
     # Display real A2A events (what client receives via SSE)
@@ -199,6 +225,9 @@ async def test_a2a_executor_scenarios():
         print("🔧 Review the state mappings and event handling")
     
     return all_passed
+
+# Tell pytest not to treat this helper as a test when the module is imported.
+test_a2a_executor_scenarios.__test__ = False  # type: ignore[attr-defined]
 
 
 if __name__ == "__main__":

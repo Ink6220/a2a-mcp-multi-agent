@@ -76,22 +76,8 @@ class TaskDelegator():
                             self.task_updater.task_id,
                         )
                         message = append_message_metadata(message, {"agent_name": agent_name})
-                        self.task_updater.update_status(TaskState.working, message)
+                        await self.task_updater.update_status(TaskState.working, message)
 
-                        # --- Persist message to memory ---
-                        if self.memory:
-                            try:
-                                task_obj = await self.memory.get_task_by_context_and_id(
-                                    self.task_updater.context_id,
-                                    self.task_updater.task_id,
-                                )
-                                if task_obj is not None:
-                                    history = list(task_obj.history or [])
-                                    history.append(message)
-                                    task_obj.history = history  # type: ignore
-                                    await self.memory.save(task_obj)
-                            except Exception:
-                                pass
                     elif evt_kind == "status-update":
                         if event.get('status') :
                             task_status = event.get('status', None)
@@ -110,7 +96,7 @@ class TaskDelegator():
                                     self.task_updater.task_id,
                                 )
                                 message = append_message_metadata(message, {"agent_name": agent_name})
-                                self.task_updater.update_status(TaskState.working, message)
+                                await self.task_updater.update_status(TaskState.working, message)
                     elif evt_kind == "artifact-update":
                         artifact = event.get("artifact")
                         
@@ -118,28 +104,14 @@ class TaskDelegator():
                             # Ensure proper type conversion
                             if isinstance(artifact, dict):
                                 parts = artifact.get('parts', [])
-                                self.task_updater.add_artifact(
+                                await self.task_updater.add_artifact(
                                     parts=parts,
                                     metadata={"agent_name": agent_name}
                                     # additional fields eg id, metadata etc can be added
                                 )
-                                # persist artifact
-                                if self.memory:
-                                    try:
-                                        task_obj = await self.memory.get_task_by_context_and_id(
-                                            self.task_updater.context_id,
-                                            self.task_updater.task_id,
-                                        )
-                                        if task_obj is not None:
-                                            if isinstance(artifact, Artifact):
-                                                artifacts = list(task_obj.artifacts or [])  # type: ignore
-                                                artifacts.append(artifact)
-                                                task_obj.artifacts = artifacts  # type: ignore
-                                            await self.memory.save(task_obj)
-                                    except Exception:
-                                        pass
+ 
                             elif hasattr(artifact, 'parts'):
-                                self.task_updater.add_artifact(
+                                await self.task_updater.add_artifact(
                                     parts=artifact.parts,
                                     metadata={"agent_name": agent_name}
                                 )
@@ -165,7 +137,7 @@ class TaskDelegator():
                             self.task_updater.task_id,
                         )
                         error_message = append_message_metadata(error_message, {"agent_name": agent_name})
-                        self.task_updater.update_status(TaskState.failed, error_message)
+                        await self.task_updater.update_status(TaskState.failed, error_message)
                     # Add more event types as needed
             except Exception as e:
                 logger.error(f"[{agent_name}] Stream {idx} error: {e}")
@@ -175,7 +147,7 @@ class TaskDelegator():
                     self.task_updater.task_id,
                 )
                 error_message = append_message_metadata(error_message, {"agent_name": agent_name})
-                self.task_updater.update_status(TaskState.failed, error_message)
+                await self.task_updater.update_status(TaskState.failed, error_message)
             finally:
                 streams_done[idx] = True
 

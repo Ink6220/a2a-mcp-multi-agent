@@ -589,62 +589,6 @@ class A2AOpenaiAgentNative(BaseAgent):
 
         return converted_tools
 
-    def parse_agent_response(self, response):
-        if response and isinstance(response, ResponseFormat): 
-            # print("[Presale]: ", response.status)
-            if response.action == 'answer':
-                if response.status == "input_required":
-                    return {
-                        "is_task_complete": False,
-                        "require_user_input": True,
-                        "content": response.message,
-                        "hang_up": False,
-                        "call_next_agent": False,
-                        "agent_name": ""
-                    }
-                elif response.status == "error":
-                    return {
-                        "is_task_complete": False,
-                        "require_user_input": True,
-                        "content": response.message,
-                        "hang_up": False,
-                        "call_next_agent": False,
-                        "agent_name": ""
-                    }
-                elif response.status == "completed":
-                    return {
-                        "is_task_complete": True,
-                        "require_user_input": False,
-                        "content": response.message,
-                        "hang_up": False,
-                        "call_next_agent": False,
-                        "agent_name": ""
-                    }
-                elif response.status == "hang_up":
-                    return {
-                        "is_task_complete": True,
-                        "require_user_input": False,
-                        "content": response.message,
-                        "hang_up": True,
-                        "call_next_agent": False,
-                        "agent_name": ""
-                    }
-            elif response.action == 'call_next_agent':
-                return {
-                    "is_task_complete": True,
-                    "require_user_input": False,
-                    "content": response.message,
-                    "hang_up": False,
-                    "call_next_agent": True,
-                    "agent_name": response.agent_name
-                }
-
-        return {
-            "is_task_complete": False,
-            "require_user_input": True,
-            "content": "We are unable to process your request at the moment. Please try again.",
-        }
-
     def root_instruction(self, chat_history, tools=None, agent_info=None):
         prompt = self.agent_card.systemPrompt or "You are a helpful assistant."
         return A2A_OPENAI_NATIVE_BASE_PROMPT.format(agent_name=self.agent_card.name, system_prompt=prompt, chat_history=chat_history, agent_info=agent_info)
@@ -652,44 +596,6 @@ class A2AOpenaiAgentNative(BaseAgent):
     def root_follow_up_instruction(self, chat_history: str, tools: Any = None, agent_info: Any = None) -> str:
         prompt = self.agent_card.systemPrompt or "You are a helpful assistant."
         return A2A_OPENAI_NATIVE_FOLLOW_UP_BASE_PROMPT.format(agent_name=self.agent_card.name, system_prompt=prompt, chat_history=chat_history, agent_info=agent_info)
-
-    def _create_and_store_usage(self, usage_id: str, context_id: str, task_id: str, 
-                               query: str, result: ResponseFormat, api_usage: ApiUsage, tool_calls: list[ToolCall], 
-                               tool_outputs: list[ToolOutput]) -> Usage:
-        usage = Usage(
-            usage_id=usage_id,
-            context_id=context_id,
-            task_id=task_id,
-            model_name=self.model_name,
-            user_input=query,
-            output=result,
-            prompt_tokens=api_usage.prompt_tokens,
-            completion_tokens=api_usage.completion_tokens,
-            extra_usage=api_usage.extra_usage,
-            tool_calls=tool_calls if tool_calls else None,
-            tool_outputs=tool_outputs if tool_outputs else None
-        )
-
-        self.record_usage(usage)
-        
-        # Print usage details
-        print(f"\n{Fore.MAGENTA}=== USAGE DETAILS ==={Style.RESET_ALL}")
-        print(f"Usage ID: {usage.usage_id}")
-        print(f"Context ID: {usage.context_id}")
-        print(f"Task ID: {usage.task_id}")
-        print(f"Model: {usage.model_name}")
-        print(f"Prompt Tokens: {usage.prompt_tokens}")
-        print(f"Completion Tokens: {usage.completion_tokens}")
-        if usage.extra_usage:
-            print(f"Reasoning Tokens: {usage.extra_usage.reasoning_tokens}")
-            print(f"Cache Tokens: {usage.extra_usage.cache_tokens}")
-        if usage.tool_calls:
-            print(f"Tool Calls: {len(usage.tool_calls)}")
-            for i, tool_call in enumerate(usage.tool_calls):
-                print(f"  [{i+1}] {tool_call.tool_name}: {tool_call.arguments}")
-        if usage.tool_outputs:
-            print(f"Tool Outputs: {len(usage.tool_outputs)}")
-        print(f"{Fore.MAGENTA}==================={Style.RESET_ALL}\n")
 
     def _extract_tool_calls_and_outputs(self, result) -> tuple[list[ToolCall], list[ToolOutput]]:
         pass

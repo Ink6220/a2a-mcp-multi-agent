@@ -133,10 +133,6 @@ class BaseAgent(ABC):
         """Convert tools to the format expected by the specific agent implementation."""
         pass
 
-    @abstractmethod
-    def parse_agent_response(self, response) -> Dict[str, Any]:
-        """Parse the agent's response into standardized format."""
-        pass
 
     @abstractmethod
     def parse_structure_output(self, text: str) -> Union[ResponseFormat, str]:
@@ -265,7 +261,7 @@ class BaseAgent(ABC):
         return result
     
     def _create_and_store_usage(self, usage_id: str, context_id: str, task_id: str, 
-                               query: str, result, api_usage, tool_calls: list[ToolCall], 
+                               query: str, result: ResponseFormat, api_usage: ApiUsage, tool_calls: list[ToolCall], 
                                tool_outputs: list[ToolOutput]) -> Usage:
         usage = Usage(
             usage_id=usage_id,
@@ -273,13 +269,10 @@ class BaseAgent(ABC):
             task_id=task_id,
             model_name=self.model_name,
             user_input=query,
-            output=result.final_output,
-            prompt_tokens=api_usage.input_tokens,
-            completion_tokens=api_usage.output_tokens,
-            extra_usage=ExtraUsage(
-                reasoning_tokens=api_usage.input_tokens_details.cached_tokens, 
-                cache_tokens=api_usage.output_tokens_details.reasoning_tokens
-            ),
+            output=result,
+            prompt_tokens=api_usage.prompt_tokens,
+            completion_tokens=api_usage.completion_tokens,
+            extra_usage=api_usage.extra_usage,
             tool_calls=tool_calls if tool_calls else None,
             tool_outputs=tool_outputs if tool_outputs else None
         )

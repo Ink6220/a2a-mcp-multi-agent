@@ -1,4 +1,4 @@
-from a2a_mcp.common.base_agent.base_agent import BaseAgent, ResponseFormat, Usage, ExtraUsage, ToolCall, ToolOutput
+from a2a_mcp.common.base_agent.base_agent import BaseAgent, ResponseFormat, Usage, ExtraUsage, ToolCall, ToolOutput, ApiUsage
 from a2a_mcp.common.prompts import A2A_OPENAI_BASE_PROMPT, A2A_OPENAI_FOLLOW_UP_BASE_PROMPT
 from agents import Agent, ModelSettings, Runner, ItemHelpers
 from openai.types.responses import ResponseTextDeltaEvent
@@ -162,15 +162,20 @@ class A2AOpenaiAgent(BaseAgent):
                             {"output": to.output} 
                             for to in tool_outputs
                         ]
-            
-            # สร้างและเก็บ Usage
             self._create_and_store_usage(
                     usage_id=usage_id,
                     context_id=context_id,
                     task_id=task_id,
                     query=query,
-                    result=result,
-                    api_usage=api_usage,
+                    result=result.final_output,
+                    api_usage=ApiUsage(
+                        prompt_tokens=api_usage.input_tokens,
+                        completion_tokens=api_usage.output_tokens,
+                        extra_usage=ExtraUsage(
+                            reasoning_tokens=api_usage.input_tokens_details.cached_tokens, 
+                            cache_tokens=api_usage.output_tokens_details.reasoning_tokens
+                        ),
+                    ),
                     tool_calls=tool_calls,
                     tool_outputs=tool_outputs            
                 )
@@ -447,66 +452,6 @@ class A2AOpenaiAgent(BaseAgent):
 
     def convert_tool_format(self, tools) -> Any:
         pass
-
-    def parse_agent_response(self, response: ResponseFormat):
-        if response and isinstance(response, ResponseFormat): 
-            # print("[Presale]: ", response.status)
-            if response.action == 'answer':
-                if response.status == "input_required":
-                    return {
-                        "is_task_complete": False,
-                        "require_user_input": True,
-                        "content": response.message,
-                        "hang_up": response.custom_status == "hang_up",
-                        "call_next_agent": False,
-                        "agent_name": "",
-                        "next_agent_instruction": "",
-                        "artifacts": {}
-                    }
-                elif response.status == "failed":
-                    return {
-                        "is_task_complete": False,
-                        "require_user_input": True,
-                        "content": response.message,
-                        "hang_up": response.custom_status == "hang_up",
-                        "call_next_agent": False,
-                        "agent_name": "",
-                        "next_agent_instruction": "",
-                        "artifacts": {}
-                    }
-                elif response.status == "completed":
-                    return {
-                        "is_task_complete": True,
-                        "require_user_input": False,
-                        "content": response.message,
-                        "hang_up": response.custom_status == "hang_up",
-                        "call_next_agent": False,
-                        "agent_name": "",
-                        "next_agent_instruction": "",
-                        "artifacts": {}
-                    }
-            elif response.action == 'call_next_agent':
-                return {
-                    "is_task_complete": response.status == "completed",
-                    "require_user_input": response.status == "input_required",
-                    "content": response.message,
-                    "hang_up": False,
-                    "call_next_agent": True,
-                    "agent_name": response.agent_name,
-                    "next_agent_instruction": response.next_agent_instruction,
-                    "artifacts": response.artifacts
-                }
-
-        return {
-            "is_task_complete": False,
-            "require_user_input": True,
-            "content": "We are unable to process your request at the moment. Please try again.",
-            "hang_up": False,
-            "call_next_agent": False,
-            "agent_name": "",
-            "next_agent_instruction": "",
-            "artifacts": {}
-        }
     
     def root_instruction(self, chat_history: str, tools: Any = None, agent_info: Any = None) -> str:
         prompt = self.agent_card.systemPrompt or "You are a helpful assistant."

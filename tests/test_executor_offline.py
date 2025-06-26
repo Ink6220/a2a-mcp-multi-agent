@@ -9,4 +9,4 @@ from unit_tests.test_execute_starlette_compliance.unit_test_starlette import (
 def test_executor_compliance_scenarios():
     """Runs the executor scenario suite that uses mock agents only (offline)."""
     all_passed = asyncio.run(test_a2a_executor_scenarios())
-    assert all_passed, "One or more executor compliance scenarios failed" 
+    assert all_passed, "Executor publishes states appropriately (state transition definitions in /unit_tests/test_execute_starlette_compliance/StateTransition_logic.png)" 

@@ -22,6 +22,8 @@ async def test_openai_agent_compliance_and_behavior():
 
     The environment variable OPENAI_API_KEY, NOVA_API_KEY, other API keys **must** be set.  If it is not
     present this test will fail immediately, signalling a CI mis-configuration.
+    The tests if the LLM can respond in a predictable ResponseFormat, if this is failing, the problem is likely in the agent code
+    The tests if the LLM can respond in a predictable ResponseFormat, if this is failing, the problem is likely in the prompt
     """
     assert os.getenv("OPENAI_API_KEY"), (
         "OPENAI_API_KEY environment variable not set. "

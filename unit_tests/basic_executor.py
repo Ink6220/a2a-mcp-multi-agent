@@ -50,7 +50,7 @@ class GenericAgentExecutor(AgentExecutor):
                 taskId=None
             )
             task = new_task(message)
-            event_queue.enqueue_event(task)
+            await event_queue.enqueue_event(task)
             print(f"📋 Created new task: {task.id}")
         
         # Create real A2A TaskUpdater for proper state management
@@ -62,7 +62,7 @@ class GenericAgentExecutor(AgentExecutor):
         )
 
         # sends message via SSE to client
-        updater.update_status(TaskState.working, working_message)
+        await updater.update_status(TaskState.working, working_message)
         try:
             session_id = task.contextId
             history = "" # TODO: Load Memory
@@ -76,16 +76,16 @@ class GenericAgentExecutor(AgentExecutor):
                     task.contextId,
                     task.id,
                 )
-                updater.update_status(TaskState.input_required, delegation_message, final=True)
+                await updater.update_status(TaskState.input_required, delegation_message, final=True)
                 # Do NOT mark as completed or add artifact here
             elif response_obj.status == "completed":
                 # Normal task completion - use real A2A types
                 part = Part(root=TextPart(text=response_obj.message))
-                updater.add_artifact(
+                await updater.add_artifact(
                     [part], 
                     name=f'{self.agent.agent_name}-result'
                 )
-                updater.complete()
+                await updater.complete()
 
             elif response_obj.status == "input_required" and response_obj.action == "answer":
                 # Task requires user input - pause and wait
@@ -95,7 +95,7 @@ class GenericAgentExecutor(AgentExecutor):
                     task.contextId,
                     task.id,
                 )
-                updater.update_status(TaskState.input_required, input_message, final=True)
+                await updater.update_status(TaskState.input_required, input_message, final=True)
                 
             elif response_obj.status == "failed":
                 # Task failed - mark as failed (not input_required)
@@ -105,7 +105,7 @@ class GenericAgentExecutor(AgentExecutor):
                     task.contextId,
                     task.id,
                 )
-                updater.update_status(TaskState.failed, failed_message, final=True)
+                await updater.update_status(TaskState.failed, failed_message, final=True)
                  
             else:
                 # Unknown status - treat as still working
@@ -115,7 +115,7 @@ class GenericAgentExecutor(AgentExecutor):
                     task.contextId,
                     task.id,
                 )
-                updater.update_status(TaskState.working, working_message)
+                await updater.update_status(TaskState.working, working_message)
                  
         except Exception as e:
             # Exception handling - mark as failed, not input_required
@@ -125,7 +125,7 @@ class GenericAgentExecutor(AgentExecutor):
                 task.contextId,
                 task.id,
             )
-            updater.update_status(TaskState.failed, error_message, final=True)
+            await updater.update_status(TaskState.failed, error_message, final=True)
 
     async def cancel(self, context: RequestContext, event_queue):
         # No-op for test executor

@@ -36,13 +36,11 @@ unit_tests/
 ├── README.md                                          # This file
 ├── test_invoke()_protocol_compliance/                 # Layer 1: Agent Testing
 │   ├── Testing_agents_invoke().md                     # Documentation for ResponseFormat
-│   ├── test_agent_a2a_compliance.py                   # Tests for ResponseFormat objects
-│   └── basic_executor.py                              # Simplified executor
+│   └── test_agent_a2a_compliance.py                   # Tests for ResponseFormat objects
 └── test_execute()_starlette_compliance/              # Layer 2: Executor Testing
     ├── Testing_execute()_starlette_compliance.md      # Documentation for executor
     ├── mock_agent.py                                  # Mock agent returns ResponseFormat objects
     ├── unit_test_starlette.py                         # Starlette simulation
-    └── manual_test_executor.py                        # Manual debugging utilities
 ```
 
 ---
@@ -182,7 +180,6 @@ With this `ResponseFormat`-based architecture, you ensure a type-safe, robust, a
 
 ### **Test Files**
 - [`test_agent_a2a_compliance.py`](test_invoke()_protocol_compliance/test_agent_a2a_compliance.py) - Agent compliance tester
-- [`basic_executor.py`](test_invoke()_protocol_compliance/basic_executor.py) - Simplified executor for agent testing
 - [`mock_agent.py`](test_execute()_starlette_compliance/mock_agent.py) - Mock agent with pytest tests
 - [`unit_test_starlette.py`](test_execute()_starlette_compliance/unit_test_starlette.py) - Starlette integration simulation
 

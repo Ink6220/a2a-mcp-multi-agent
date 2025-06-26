@@ -447,66 +447,6 @@ class A2AOpenaiAgent(BaseAgent):
 
     def convert_tool_format(self, tools) -> Any:
         pass
-
-    def parse_agent_response(self, response: ResponseFormat):
-        if response and isinstance(response, ResponseFormat): 
-            # print("[Presale]: ", response.status)
-            if response.action == 'answer':
-                if response.status == "input_required":
-                    return {
-                        "is_task_complete": False,
-                        "require_user_input": True,
-                        "content": response.message,
-                        "hang_up": response.custom_status == "hang_up",
-                        "call_next_agent": False,
-                        "agent_name": "",
-                        "next_agent_instruction": "",
-                        "artifacts": {}
-                    }
-                elif response.status == "failed":
-                    return {
-                        "is_task_complete": False,
-                        "require_user_input": True,
-                        "content": response.message,
-                        "hang_up": response.custom_status == "hang_up",
-                        "call_next_agent": False,
-                        "agent_name": "",
-                        "next_agent_instruction": "",
-                        "artifacts": {}
-                    }
-                elif response.status == "completed":
-                    return {
-                        "is_task_complete": True,
-                        "require_user_input": False,
-                        "content": response.message,
-                        "hang_up": response.custom_status == "hang_up",
-                        "call_next_agent": False,
-                        "agent_name": "",
-                        "next_agent_instruction": "",
-                        "artifacts": {}
-                    }
-            elif response.action == 'call_next_agent':
-                return {
-                    "is_task_complete": response.status == "completed",
-                    "require_user_input": response.status == "input_required",
-                    "content": response.message,
-                    "hang_up": False,
-                    "call_next_agent": True,
-                    "agent_name": response.agent_name,
-                    "next_agent_instruction": response.next_agent_instruction,
-                    "artifacts": response.artifacts
-                }
-
-        return {
-            "is_task_complete": False,
-            "require_user_input": True,
-            "content": "We are unable to process your request at the moment. Please try again.",
-            "hang_up": False,
-            "call_next_agent": False,
-            "agent_name": "",
-            "next_agent_instruction": "",
-            "artifacts": {}
-        }
     
     def root_instruction(self, chat_history: str, tools: Any = None, agent_info: Any = None) -> str:
         prompt = self.agent_card.systemPrompt or "You are a helpful assistant."

@@ -133,10 +133,6 @@ class BaseAgent(ABC):
         """Convert tools to the format expected by the specific agent implementation."""
         pass
 
-    @abstractmethod
-    def parse_agent_response(self, response) -> Dict[str, Any]:
-        """Parse the agent's response into standardized format."""
-        pass
 
     @abstractmethod
     def parse_structure_output(self, text: str) -> Union[ResponseFormat, str]:

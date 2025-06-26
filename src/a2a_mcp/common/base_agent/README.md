@@ -74,7 +74,6 @@ This is the cornerstone of the framework. Developers must inherit from `BaseAgen
 *   `follow_up_invoke(query, context_id, task_id, context)`: Handles a follow-up interaction, typically after a delegated task is completed, to decide the next step.
 *   `stream(query, context_id, task_id)`: Handles a streaming query, yielding responses incrementally.
 *   `convert_tool_format(tools)`: Converts a generic tool definition into the format expected by the specific LLM or agent backend.
-*   `parse_agent_response(response)`: Parses the raw response from the LLM/backend into a standardized dictionary.
 *   `parse_structure_output(text)`: Parses text output (potentially from an LLM) into a `ResponseFormat` object or returns the raw text if parsing fails.
 *   `root_instruction(chat_history, tools, agent_info)`: Generates the main system prompt or instruction for the LLM.
 *   `make_remote_agent_connection(target_agent_card, request)`: Establishes and manages a streaming connection to another agent.

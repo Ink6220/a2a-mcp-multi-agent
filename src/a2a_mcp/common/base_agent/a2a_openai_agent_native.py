@@ -589,62 +589,6 @@ class A2AOpenaiAgentNative(BaseAgent):
 
         return converted_tools
 
-    def parse_agent_response(self, response):
-        if response and isinstance(response, ResponseFormat): 
-            # print("[Presale]: ", response.status)
-            if response.action == 'answer':
-                if response.status == "input_required":
-                    return {
-                        "is_task_complete": False,
-                        "require_user_input": True,
-                        "content": response.message,
-                        "hang_up": False,
-                        "call_next_agent": False,
-                        "agent_name": ""
-                    }
-                elif response.status == "error":
-                    return {
-                        "is_task_complete": False,
-                        "require_user_input": True,
-                        "content": response.message,
-                        "hang_up": False,
-                        "call_next_agent": False,
-                        "agent_name": ""
-                    }
-                elif response.status == "completed":
-                    return {
-                        "is_task_complete": True,
-                        "require_user_input": False,
-                        "content": response.message,
-                        "hang_up": False,
-                        "call_next_agent": False,
-                        "agent_name": ""
-                    }
-                elif response.status == "hang_up":
-                    return {
-                        "is_task_complete": True,
-                        "require_user_input": False,
-                        "content": response.message,
-                        "hang_up": True,
-                        "call_next_agent": False,
-                        "agent_name": ""
-                    }
-            elif response.action == 'call_next_agent':
-                return {
-                    "is_task_complete": True,
-                    "require_user_input": False,
-                    "content": response.message,
-                    "hang_up": False,
-                    "call_next_agent": True,
-                    "agent_name": response.agent_name
-                }
-
-        return {
-            "is_task_complete": False,
-            "require_user_input": True,
-            "content": "We are unable to process your request at the moment. Please try again.",
-        }
-
     def root_instruction(self, chat_history, tools=None, agent_info=None):
         prompt = self.agent_card.systemPrompt or "You are a helpful assistant."
         return A2A_OPENAI_NATIVE_BASE_PROMPT.format(agent_name=self.agent_card.name, system_prompt=prompt, chat_history=chat_history, agent_info=agent_info)

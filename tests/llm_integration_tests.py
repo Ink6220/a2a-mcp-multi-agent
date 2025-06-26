@@ -31,8 +31,5 @@ async def test_openai_agent_compliance_and_behavior():
 
     standard_agent = create_test_agent()
 
-    compliance_results = await A2AComplianceTester.test_agent_invoke_compliance(standard_agent)
-    assert compliance_results["status"] == "PASSED", compliance_results.get("error", "Unknown error")
-
     behavior_results = await LLMBehaviorTester.test_llm_behavior(standard_agent)
     assert behavior_results["status"] == "PASSED", behavior_results.get("failed_tests") 

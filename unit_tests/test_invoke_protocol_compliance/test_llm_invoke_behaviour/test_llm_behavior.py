@@ -48,7 +48,7 @@ class LLMBehaviorTester:
             }
         },
         {
-            "name": "Input Required State",
+            "name": "Follow up question to user State",
             "query": "Hi this is a vague prompt, please ask for more information",
             "expected_state": {
                 "action": "answer",

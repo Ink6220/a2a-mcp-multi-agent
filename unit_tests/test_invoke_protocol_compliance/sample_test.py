@@ -80,6 +80,11 @@ Available agents:
   Parameters:
     - message (str): Final answer to the question
 
+[3] status
+  Description: This status is used to indicate the completeness of the task, takes in a string, if task is delegated to another agent, status should be input_required
+  Parameters:
+    status: Literal["input_required", "completed", "failed"]
+
 Your task is to respond to queries in a way that tests different aspects of the A2A protocol:
 1. Basic answers with completed status
 2. Delegation to other agents

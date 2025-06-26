@@ -671,44 +671,6 @@ class A2ANovaAgent(BaseAgent):
         prompt = self.agent_card.systemPrompt or "You are a helpful assistant."
         return A2A_NOVA_FOLLOW_UP_BASE_PROMPT.format(agent_name=self.agent_card.name, system_prompt=prompt, chat_history=chat_history, tools=tools, agent_info=agent_info)
 
-    def _create_and_store_usage(self, usage_id: str, context_id: str, task_id: str, 
-                               query: str, result: ResponseFormat, api_usage: ApiUsage, tool_calls: list[ToolCall], 
-                               tool_outputs: list[ToolOutput]) -> Usage:
-        usage = Usage(
-            usage_id=usage_id,
-            context_id=context_id,
-            task_id=task_id,
-            model_name=self.model_name,
-            user_input=query,
-            output=result,
-            prompt_tokens=api_usage.prompt_tokens,
-            completion_tokens=api_usage.completion_tokens,
-            extra_usage=api_usage.extra_usage,
-            tool_calls=tool_calls if tool_calls else None,
-            tool_outputs=tool_outputs if tool_outputs else None
-        )
-
-        self.record_usage(usage)
-        
-        # Print usage details
-        print(f"\n{Fore.MAGENTA}=== USAGE DETAILS ==={Style.RESET_ALL}")
-        print(f"Usage ID: {usage.usage_id}")
-        print(f"Context ID: {usage.context_id}")
-        print(f"Task ID: {usage.task_id}")
-        print(f"Model: {usage.model_name}")
-        print(f"Prompt Tokens: {usage.prompt_tokens}")
-        print(f"Completion Tokens: {usage.completion_tokens}")
-        if usage.extra_usage:
-            print(f"Reasoning Tokens: {usage.extra_usage.reasoning_tokens}")
-            print(f"Cache Tokens: {usage.extra_usage.cache_tokens}")
-        if usage.tool_calls:
-            print(f"Tool Calls: {len(usage.tool_calls)}")
-            for i, tool_call in enumerate(usage.tool_calls):
-                print(f"  [{i+1}] {tool_call.tool_name}: {tool_call.arguments}")
-        if usage.tool_outputs:
-            print(f"Tool Outputs: {len(usage.tool_outputs)}")
-        print(f"{Fore.MAGENTA}==================={Style.RESET_ALL}\n")
-
     def _extract_tool_calls_and_outputs(self, result) -> tuple[list[ToolCall], list[ToolOutput]]:
         pass
     def _extract_tool_call(self, item) -> ToolCall:

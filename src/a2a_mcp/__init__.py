@@ -16,7 +16,7 @@ from a2a_mcp.mcp import server
 @click.option(
     '--port',
     'port',
-    default=10100,
+    default=8000,
     help='Port on which the server is started or the client connects to',
 )
 @click.option(

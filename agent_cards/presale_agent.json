@@ -1,7 +1,7 @@
 {
-    "name": "Orchestrator Agent",
-    "description": "Orchestrates the task generation and execution",
-    "url": "http://localhost:10101/",
+    "name": "Presale Agent",
+    "description": "Initiate contact, qualify customer availability. Only call this agent to ask for availability only, otherwise call other agent. Input format: {{user_question}}",
+    "url": "http://localhost:10001/",
     "provider": {
         "organization": "openai",
         "url":"None"
@@ -29,14 +29,15 @@
     ],
     "skills": [
         {
-            "id": "executor",
-            "name": "Task Executor",
-            "description": "Orchestrates the task generation and execution, takes help from the planner to generate tasks",
+            "id": "greet_and_introduce",
+            "name": "Greet and introduce the promotion",
+            "description": "Helps Initiate contact to customer and qualify customer availability.",
             "tags": [
-                "execute plan"
+                "Greeting",
+                "Asking customer availability"
             ],
             "examples": [
-                "Plan my trip to London, submit an expense report"
+                "สวัสดี"
             ],
             "inputModes": null,
             "outputModes": null
@@ -44,5 +45,5 @@
     ],
     "modelName":"gpt-4.1-mini",
     "systemPrompt": "",
-    "nextAgent": ["http://localhost:10002/", "http://localhost:10001/"]
+    "nextAgent": ["http://localhost:10002/"]
 }

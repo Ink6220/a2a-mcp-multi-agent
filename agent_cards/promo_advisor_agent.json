@@ -1,7 +1,7 @@
 {
-    "name": "Orchestrator Agent",
-    "description": "Orchestrates the task generation and execution",
-    "url": "http://localhost:10101/",
+    "name": "PromoAdvisor Agent",
+    "description": "Present details, answer basic questions, log interest. Can only call this agent when customer tells that they available.",
+    "url": "http://localhost:10002/",
     "provider": {
         "organization": "openai",
         "url":"None"
@@ -29,20 +29,21 @@
     ],
     "skills": [
         {
-            "id": "executor",
-            "name": "Task Executor",
-            "description": "Orchestrates the task generation and execution, takes help from the planner to generate tasks",
+            "id": "check_car_brand",
+            "name": "Check car brand",
+            "description": "Check car brand from model name. require (model_name: str)",
             "tags": [
-                "execute plan"
+                "Car Brand"
             ],
             "examples": [
-                "Plan my trip to London, submit an expense report"
+                "{\"model_name\": มาสด้า}",
+                "{\"model_name\": โตโยต้า}"
             ],
-            "inputModes": null,
-            "outputModes": null
+            "inputModes": ["application/json"],
+            "outputModes": ["text/html"]
         }
     ],
     "modelName":"gpt-4.1-mini",
     "systemPrompt": "",
-    "nextAgent": ["http://localhost:10002/", "http://localhost:10001/"]
+    "nextAgent": ["http://localhost:10001/"]
 }

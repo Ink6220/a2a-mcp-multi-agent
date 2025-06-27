@@ -1,0 +1,9 @@
+{
+    "yaml.customTags": [
+      "!secrets scalar",
+      "!secrets",
+      "!Ref scalar",
+      "!Sub scalar"
+    ],
+    "yaml.validate": true
+  }

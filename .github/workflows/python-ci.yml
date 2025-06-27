@@ -1,0 +1,41 @@
+name: Python CI
+
+on:
+  push:
+    branches:
+      - main  # Only run on push to main
+  pull_request:
+    branches:
+      - '**'  # Run on PR to any branch
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install dependencies
+        run: |
+          pip install -e .
+          pip install -r requirements-dev.txt
+
+      # PR to branches other than main
+      - name: Run logic-only tests (no API useage) 
+        if: github.event_name == 'pull_request' && github.base_ref != 'main'
+        run: pytest -m "not requires_api_key"
+
+      # Push to main or PR to main
+      - name: Run full test suite (with API keys, OpenAI, Nova etc)
+        if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || (github.event_name == 'pull_request' && github.base_ref == 'main')
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          if [ -z "$OPENAI_API_KEY" ]; then
+            echo "::error::OPENAI_API_KEY secret is missing.";
+            exit 1;
+          fi
+          pytest --run_requires_api

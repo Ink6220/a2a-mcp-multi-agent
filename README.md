@@ -37,7 +37,7 @@ AWS_SECRET_ACCESS_KEY=
 
 ```bash
 # Start MCP server (default port 8000)
-uv run a2a-mcp --run temp-mcp-server --transport sse
+uv run a2a-mcp --run mcp-server --transport sse
 ```
 
 ### Running Agents

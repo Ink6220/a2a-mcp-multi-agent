@@ -2,7 +2,7 @@
 
 import click
 
-from a2a_mcp.mcp import server, temp_server
+from a2a_mcp.mcp import server
 
 
 @click.command()
@@ -29,7 +29,5 @@ def main(command, host, port, transport) -> None:
     # TODO: Add other servers, perhaps dynamic port allocation
     if command == 'mcp-server':
         server.serve(host, port, transport)
-    elif command == 'temp-mcp-server':
-        temp_server.serve(host, port, transport)
     else:
         raise ValueError(f'Unknown run option: {command}')

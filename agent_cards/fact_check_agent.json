@@ -1,0 +1,38 @@
+{
+  "name": "FactCheckerAgent",
+  "description": "ตรวจสอบความถูกต้องของข้อมูลที่ LeadResearchAgent ส่งมา",
+  "url": "http://localhost:10204/",
+  "provider": {
+    "organization": "openai",
+    "url": "None"
+  },
+  "version": "1.0.0",
+  "documentationUrl": null,
+  "capabilities": {
+    "streaming": "True",
+    "pushNotifications": "True",
+    "stateTransitionHistory": "False"
+  },
+  "authentication": {
+    "credentials": null,
+    "schemes": ["public"]
+  },
+  "defaultInputModes": ["text","text/plain"],
+  "defaultOutputModes": ["text","text/plain"],
+  "skills": [
+    {
+      "id": "verify_facts",
+      "name": "Verify Facts",
+      "description": "เปรียบเทียบข้อมูลกับแหล่งอ้างอิงหลายแหล่งและแจ้งความไม่สอดคล้อง",
+      "tags": ["fact-check"],
+      "examples": [
+        "ยืนยันแหล่งข้อมูลสองแหล่งขึ้นไปสำหรับคำกล่าวอ้างนี้"
+      ],
+      "inputModes": null,
+      "outputModes": null
+    }
+  ],
+  "modelName": "gpt-4.1-mini",
+  "systemPrompt": "",
+  "nextAgent": ["http://localhost:10201/"]
+}

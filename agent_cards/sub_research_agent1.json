@@ -1,0 +1,38 @@
+{
+  "name": "SubResearchAgent1",
+  "description": "ค้นคว้าเชิงลึกตามงานย่อยที่ได้รับมอบหมายจาก LeadResearcher",
+  "url": "http://localhost:10202/",
+  "provider": {
+    "organization": "openai",
+    "url": "None"
+  },
+  "version": "1.0.0",
+  "documentationUrl": null,
+  "capabilities": {
+    "streaming": "True",
+    "pushNotifications": "True",
+    "stateTransitionHistory": "False"
+  },
+  "authentication": {
+    "credentials": null,
+    "schemes": ["public"]
+  },
+  "defaultInputModes": ["text","text/plain"],
+  "defaultOutputModes": ["text","text/plain"],
+  "skills": [
+    {
+      "id": "explore_topic",
+      "name": "Explore Topic",
+      "description": "ใช้เครื่องมือค้นหาและฐานข้อมูลวิชาการเพื่อดึงข้อมูลเชิงลึกตามหัวข้อย่อย",
+      "tags": ["search","explore"],
+      "examples": [
+        "ค้นคว้าผลกระทบอุณหภูมิสูงต่อข้าวไรซ์เบอร์รี่"
+      ],
+      "inputModes": null,
+      "outputModes": null
+    }
+  ],
+  "modelName": "gpt-4.1-mini",
+  "systemPrompt": "",
+  "nextAgent": ["http://localhost:10201/"]
+}

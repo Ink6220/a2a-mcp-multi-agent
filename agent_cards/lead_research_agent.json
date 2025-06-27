@@ -1,0 +1,38 @@
+{
+  "name": "LeadResearcher Agent",
+  "description": "รับคำถามวิจัยจากผู้ใช้ และจัดแผนงานวิจัยโดยแบ่งเป็นงานย่อย",
+  "url": "http://localhost:10201/",
+  "provider": {
+    "organization": "openai",
+    "url": "None"
+  },
+  "version": "1.0.0",
+  "documentationUrl": null,
+  "capabilities": {
+    "streaming": "True",
+    "pushNotifications": "True",
+    "stateTransitionHistory": "False"
+  },
+  "authentication": {
+    "credentials": null,
+    "schemes": ["public"]
+  },
+  "defaultInputModes": ["text","text/plain"],
+  "defaultOutputModes": ["text","text/plain"],
+  "skills": [
+    {
+      "id": "plan_research",
+      "name": "Plan Research",
+      "description": "แยกหัวข้อหลักเป็นงานย่อยและจัดลำดับขั้นตอนการค้นคว้าอย่างเป็นระบบ",
+      "tags": ["planning"],
+      "examples": [
+        "วางแผนวิจัยเรื่องผลกระทบการเปลี่ยนแปลงภูมิอากาศต่อผลผลิตข้าว"
+      ],
+      "inputModes": null,
+      "outputModes": null
+    }
+  ],
+  "modelName": "gpt-4.1-mini",
+  "systemPrompt": "",
+  "nextAgent": ["http://localhost:10202/","http://localhost:10203/","http://localhost:10204/"]
+}

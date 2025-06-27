@@ -38,4 +38,4 @@ jobs:
             echo "::error::OPENAI_API_KEY secret is missing.";
             exit 1;
           fi
-          pytest
+          pytest --run_requires_api

@@ -33,6 +33,7 @@ dependencies = [
 members = [
     "hosts/cli",
     "hosts/multiagent",
+    "venv",
 ]
 
 [project.scripts]

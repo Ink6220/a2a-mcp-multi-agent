@@ -275,6 +275,40 @@ def serve(host, port, transport):  # noqa: PLR0915
         ).to_list()
 
         return resources
+    
+    @mcp.tool()
+    def search_serpapi(query: str) -> dict:
+        """This tool is used to search for information using the SERPAPI service.
+        It caches queries to avoid repeated API calls for the same search term.
+        """
+        tool_name = "search_serpapi"
+        input_key = query
+        thread_id = "default"  # You can replace this with a dynamic ID per user if available
+        SERP_API_KEY = os.getenv("SERP_API_KEY")
+        try:
+            response = requests.get("https://serpapi.com/search", params={"q": query, "api_key": SERP_API_KEY})
+            if response.status_code == 200:
+                hits = response.json().get("organic_results", [])
+                print("\nSearch success\n")
+                result = {
+                    "status": "ok",
+                    "results": hits
+                }
+
+                return result
+            else:
+                print(f"Error: {response.status_code} - {response.text}")
+                return {
+                    "status": "error",
+                    "message": "ไม่สามารถเข้าถึง SERPAPI ได้ในขณะนี้"
+                }
+        except Exception as e:
+            print(f"Exception: {e}")
+            return {
+                "status": "error",
+                "message": "ไม่สามารถค้นหาข้อมูลจากอินเทอร์เน็ตได้ในขณะนี้"
+            }
+    
 
     logger.info(
         f'Agent cards MCP Server at {host}:{port} and transport {transport}'

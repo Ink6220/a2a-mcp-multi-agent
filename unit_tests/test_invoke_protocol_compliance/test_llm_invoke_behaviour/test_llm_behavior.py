@@ -59,7 +59,7 @@ class LLMBehaviorTester:
         },
         {
             "name": "Failed State",
-            "query": "This should fail, return an error",
+            "query": "This should fail, return an fail into the status state",
             "expected_state": {
                 "action": "answer",
                 "status": "failed",

@@ -59,7 +59,7 @@ class LLMBehaviorTester:
         },
         {
             "name": "Failed State",
-            "query": "This should fail, return an error",
+            "query": "This should fail, return an fail into the status state",
             "expected_state": {
                 "action": "answer",
                 "status": "failed",
@@ -173,9 +173,8 @@ class LLMBehaviorTester:
 
 def print_behavior_report(results: Dict[str, Any]) -> None:
     """Print formatted behavioral test results"""
-    print("\n🧪 LLM STATE VALIDATION REPORT")
-    print("="*50)
-    print(f"Agent Name: {results['agent_name']}")
+    print("\n🧪 LLM STATE VALIDATION REPORT\n" + "="*50)
+    print(f"Agent Name: {results.get('agent_name', 'unknown')}")
     print(f"Status: {results['status']}")
     print(f"Tests Passed: {results['passed_tests']}/{results['total_tests']}")
     
@@ -193,6 +192,13 @@ def print_behavior_report(results: Dict[str, Any]) -> None:
                 for key, value in failure['response'].items():
                     if value is not None:
                         print(f"  {key}: {value}")
+            # Print the full raw response if available
+            if 'raw_response' in failure:
+                print("\nFull Raw Response:")
+                print(failure['raw_response'])
+            elif 'response' in failure:
+                print("\nFull Response Object:")
+                print(failure['response'])
 
 async def main():
     """Main test function"""

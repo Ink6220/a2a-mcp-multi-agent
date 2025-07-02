@@ -100,7 +100,6 @@ Available agents:
 - test-agent-2: A more complex test agent for advanced tasks
 
 ## ACTION SPACE
-## ACTION SPACE
 [1] call_next_agent
   Description: Delegate tasks to one or more agents that are available in DISCOVERY. Tasks can be delegated in parallel.
   Parameters:

@@ -28,7 +28,8 @@ from unit_tests.test_execute_starlette_compliance.mock_agent import (
     get_completion_agent, 
     get_input_required_agent, 
     get_delegation_agent, 
-    get_failed_agent
+    get_failed_agent,
+    get_parallel_delegation_agent
 )
 
 # A2A Protocol Imports - Use REAL A2A SDK types only
@@ -171,9 +172,9 @@ async def test_a2a_executor_scenarios():
     print(f"✅ A2A Compliance: Task={has_task}, Working={has_working}, Failed={has_failed}, Final={has_final}, NoCompletion={no_completion}")
     print(f"✅ Test Result: {'PASSED' if success3 else 'FAILED'}")
     
-    # Test 4: Agent delegation
+    # Test 4: Agent delegation (single agent)
     print("\n" + "="*60)
-    print("TEST 4: Agent Delegation")
+    print("TEST 4: Single Agent Delegation")
     print("Expected: Task → TaskStatusUpdate(working) → TaskStatusUpdate(input_required, final=True)")
     delegation_agent = get_delegation_agent()
     events4 = await simulate_starlette_request(delegation_agent, "Please delegate this task")
@@ -187,6 +188,23 @@ async def test_a2a_executor_scenarios():
     success4 = has_task and has_working and has_input_required and has_final and no_completed
     print(f"✅ A2A Compliance: Task={has_task}, Working={has_working}, InputRequired={has_input_required}, Final={has_final}, NoCompleted={no_completed}")
     print(f"✅ Test Result: {'PASSED' if success4 else 'FAILED'}")
+
+    # Test 4b: Parallel Agent Delegation
+    print("\n" + "="*60)
+    print("TEST 4b: Parallel Agent Delegation")
+    print("Expected: Task → TaskStatusUpdate(working) → TaskStatusUpdate(input_required, final=True)")
+    parallel_delegation_agent = get_parallel_delegation_agent()
+    events4b = await simulate_starlette_request(parallel_delegation_agent, "Please delegate this task to multiple agents")
+    
+    # Verify parallel delegation handling with real A2A events
+    has_task = any(isinstance(e, Task) for e in events4b)
+    has_working = any(hasattr(e, 'status') and hasattr(e.status, 'state') and e.status.state == TaskState.working for e in events4b)
+    has_input_required = any(hasattr(e, 'status') and hasattr(e.status, 'state') and e.status.state == TaskState.input_required for e in events4b)
+    has_final = any(hasattr(e, 'final') and e.final == True for e in events4b)
+    no_completed = not any(hasattr(e, 'status') and hasattr(e.status, 'state') and e.status.state == TaskState.completed for e in events4b)
+    success4b = has_task and has_working and has_input_required and has_final and no_completed
+    print(f"✅ A2A Compliance: Task={has_task}, Working={has_working}, InputRequired={has_input_required}, Final={has_final}, NoCompleted={no_completed}")
+    print(f"✅ Test Result: {'PASSED' if success4b else 'FAILED'}")
     
     # Test 5: Exception handling (should be failed, not input_required)
     print("\n" + "="*60)
@@ -214,7 +232,7 @@ async def test_a2a_executor_scenarios():
     
     # Overall results
     print("\n" + "="*70)
-    all_passed = all([success1, success2, success3, success4, success5])
+    all_passed = all([success1, success2, success3, success4, success4b, success5])
     if all_passed:
         print("🎉 ALL A2A COMPLIANCE TESTS PASSED!")
         print("🚀 Your executor is ready for Starlette integration")
@@ -223,7 +241,7 @@ async def test_a2a_executor_scenarios():
         print("🔧 Only agent responses were mocked - all A2A infrastructure is real")
     else:
         print("❌ Some A2A compliance tests failed")
-        print(f"Results: Completion={success1}, Input={success2}, Failed={success3}, Delegation={success4}, Exception={success5}")
+        print(f"Results: Completion={success1}, Input={success2}, Failed={success3}, SingleDelegation={success4}, ParallelDelegation={success4b}, Exception={success5}")
         print("🔧 Review the state mappings and event handling")
     
     return all_passed

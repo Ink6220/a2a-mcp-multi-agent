@@ -137,7 +137,8 @@ class BaseAgentExecutor(AgentExecutor):
             # Handle response based on action
             # --- DELEGATION LOOP ---
             while response.action == "call_next_agent":
-                print(f"🔄 Delegating to agent: {response.agent_name} (input_required)")
+                agent_names_str = ", ".join(response.agent_names) if response.agent_names else "unknown agents"
+                print(f"🔄 Delegating to agents: {agent_names_str} (input_required)")
                 delegation_message = new_agent_text_message(
                     response.message,
                     task.contextId,
@@ -146,19 +147,16 @@ class BaseAgentExecutor(AgentExecutor):
                 delegation_message = append_message_metadata(delegation_message, {"agent_name": self.agent.agent_card.name})
                 await updater.update_status(TaskState.input_required, delegation_message, final=False)
 
-                # Use TaskDelegator for delegation
-                if stream := await self.delegator.delegate_task(response,self.agent.agent_card.name):
-                    self.ongoing_tasks.append(stream)
+                # Use TaskDelegator for parallel delegation
+                streams = await self.delegator.delegate_task(response, self.agent.agent_card.name)
+                if streams:
+                    self.ongoing_tasks.extend(streams)
                 
-                # Use TaskDelegator's stream management
+                # Use TaskDelegator's stream management with comma-separated agent names
                 delegation_complete = await self.delegator.manage_streams(
                     self.ongoing_tasks,
-                    response.agent_name or "unknown_agent"
+                    agent_names_str
                 )
-
-                # TODO: Add second invoke call logic here
-                # TODO: Create function to piece together context etc from delegated agents
-                # look at simple_request_context_builder.py for reference
 
                 # --- FOLLOW-UP INVOKE ---
                 # The agent re-evaluates with the new observation

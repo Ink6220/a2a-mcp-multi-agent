@@ -21,42 +21,68 @@ class TaskDelegator():
         self.task_context_id = task_context_id
         self.memory = memory
 
-    async def delegate_task(self, response_obj: ResponseFormat, sender_name: str):
+    async def delegate_task(self, response_obj: ResponseFormat, sender_name: str) -> List[AsyncGenerator[dict, None]]:
+        """Delegates tasks to multiple agents in parallel based on ResponseFormat.
+        
+        Args:
+            response_obj: The response object containing delegation info
+            sender_name: Name of the delegating agent
+            
+        Returns:
+            List of async generators for each delegation stream
+        """
         if response_obj.action != "call_next_agent":
             # Not a delegation action, nothing to do
-            return None
+            return []
 
         # Extract required fields
-        agent_name = response_obj.agent_name
-        instruction = response_obj.next_agent_instruction
-        artifacts = json.loads(response_obj.artifacts) if response_obj.artifacts else {} # TODO: add schema / custom data here (not included atm)
-        assert instruction and agent_name is not None
-
-        # Use the correct method to get the agent card
-        target_agent_card = self.agent.card_discovery.get_remote_agent_card_by_name(agent_name)
-        if not target_agent_card:
-            raise ValueError(f"Agent card for '{agent_name}' not found.")
+        agent_names = response_obj.agent_names
+        instructions = response_obj.next_agent_instructions
+        artifacts = json.loads(response_obj.artifacts) if response_obj.artifacts else {}
         
-        # Creating a taskId for the new task
-        task_id = str(uuid4()) # TODO: add tracking for delegated tasks
+        streams = []
+        
+        # Process each delegation in parallel
+        for agent_name, instruction in zip(agent_names, instructions):
+            # Get agent card for delegation
+            target_agent_card = self.agent.card_discovery.get_remote_agent_card_by_name(agent_name)
+            if not target_agent_card:
+                logger.error(f"Agent card for '{agent_name}' not found.")
+                continue
 
-        # Construct MessageSendParams (adjust as needed for your actual class)
-        request = MessageSendParams(
-            message=Message(
-                messageId=str(uuid4()),
-                taskId=task_id,
-                contextId=self.task_context_id,
-                metadata={"agent_name": sender_name},
-                parts=[Part(root=TextPart(text=instruction)), Part(root=DataPart(data=artifacts))],
-                role=Role.agent,
-            ),
-        )
-        # Return the async generator (stream) for the executor to consume
-        return await self.agent.make_remote_agent_connection(target_agent_card, request)
+            # Create task ID for this delegation
+            task_id = str(uuid4())
 
-    async def manage_streams(self, ongoing_streams: List[AsyncGenerator], agent_name: str = "remote_agent"):
+            # Construct message params
+            request = MessageSendParams(
+                message=Message(
+                    messageId=str(uuid4()),
+                    taskId=task_id,
+                    contextId=self.task_context_id,
+                    metadata={"agent_name": sender_name},
+                    parts=[Part(root=TextPart(text=instruction)), Part(root=DataPart(data=artifacts))],
+                    role=Role.agent,
+                ),
+            )
+
+            # Get stream for this delegation
+            try:
+                stream = await self.agent.make_remote_agent_connection(target_agent_card, request)
+                if stream:
+                    streams.append(stream)
+            except Exception as e:
+                logger.error(f"Failed to create stream for agent {agent_name}: {e}")
+                continue
+
+        return streams
+
+    async def manage_streams(self, ongoing_streams: List[AsyncGenerator], agent_names: str = "remote_agent"):
         """
         Consumes all ongoing async generator streams, updates the task, and returns True if all streams are complete.
+        
+        Args:
+            ongoing_streams: List of stream generators to manage
+            agent_names: Comma-separated list of agent names for logging
         """
         logger = logging.getLogger(__name__)
         streams_done = [False] * len(ongoing_streams)
@@ -65,7 +91,7 @@ class TaskDelegator():
         async def consume_stream(idx, stream):
             try:
                 async for event in stream:
-                    logger.info(f"[{agent_name}] Stream {idx} event: {event}")
+                    logger.info(f"[{agent_names}] Stream {idx} event: {event}")
                     # Normalize event discriminator to Fast-MCP standard
                     evt_kind = event.get("kind") or event.get("type")
                     if evt_kind == "message":
@@ -75,11 +101,11 @@ class TaskDelegator():
                             self.task_updater.context_id,
                             self.task_updater.task_id,
                         )
-                        message = append_message_metadata(message, {"agent_name": agent_name})
+                        message = append_message_metadata(message, {"agent_name": agent_names})
                         await self.task_updater.update_status(TaskState.working, message)
 
                     elif evt_kind == "status-update":
-                        if event.get('status') :
+                        if event.get('status'):
                             task_status = event.get('status', None)
                             if isinstance(task_status, TaskStatus) and task_status.message:
                                 message_status = task_status.message
@@ -95,7 +121,7 @@ class TaskDelegator():
                                     self.task_updater.context_id,
                                     self.task_updater.task_id,
                                 )
-                                message = append_message_metadata(message, {"agent_name": agent_name})
+                                message = append_message_metadata(message, {"agent_name": agent_names})
                                 await self.task_updater.update_status(TaskState.working, message)
                     elif evt_kind == "artifact-update":
                         artifact = event.get("artifact")
@@ -106,13 +132,12 @@ class TaskDelegator():
                                 parts = artifact.get('parts', [])
                                 await self.task_updater.add_artifact(
                                     parts=parts,
-                                    metadata={"agent_name": agent_name}
-                                    # additional fields eg id, metadata etc can be added
+                                    metadata={"agent_name": agent_names}
                                 )
                             elif hasattr(artifact, 'parts'):
                                 await self.task_updater.add_artifact(
                                     parts=artifact.parts,
-                                    metadata={"agent_name": agent_name}
+                                    metadata={"agent_name": agent_names}
                                 )
                     elif evt_kind == "error":
                         # Handle error events
@@ -121,17 +146,16 @@ class TaskDelegator():
                             self.task_updater.context_id,
                             self.task_updater.task_id,
                         )
-                        error_message = append_message_metadata(error_message, {"agent_name": agent_name})
+                        error_message = append_message_metadata(error_message, {"agent_name": agent_names})
                         await self.task_updater.update_status(TaskState.failed, error_message)
-                    # Add more event types as needed
             except Exception as e:
-                logger.error(f"[{agent_name}] Stream {idx} error: {e}")
+                logger.error(f"[{agent_names}] Stream {idx} error: {e}")
                 error_message = new_agent_text_message(
                     f"Stream processing error: {str(e)}",
                     self.task_updater.context_id,
                     self.task_updater.task_id,
                 )
-                error_message = append_message_metadata(error_message, {"agent_name": agent_name})
+                error_message = append_message_metadata(error_message, {"agent_name": agent_names})
                 await self.task_updater.update_status(TaskState.failed, error_message)
             finally:
                 streams_done[idx] = True

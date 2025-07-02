@@ -13,6 +13,9 @@ from a2a_mcp.common.utils import append_message_metadata
 import json 
 from a2a_mcp.common.memory_management import MemoryManagement
 
+
+logger = logging.getLogger(__name__)
+
 class TaskDelegator():
     def __init__(self, updater: TaskUpdater, agent: BaseAgent, task_context_id: str, memory: Optional[MemoryManagement] = None) -> None:
         # updater handles updating parent state and task, adding artifacts etc
@@ -43,7 +46,7 @@ class TaskDelegator():
         streams = []
         
         # Process each delegation in parallel
-        for agent_name, instruction in zip(agent_names, instructions):
+        for agent_name, instruction in zip(agent_names, instructions) if agent_names and instructions else []:
             # Get agent card for delegation
             target_agent_card = self.agent.card_discovery.get_remote_agent_card_by_name(agent_name)
             if not target_agent_card:
@@ -84,7 +87,6 @@ class TaskDelegator():
             ongoing_streams: List of stream generators to manage
             agent_names: Comma-separated list of agent names for logging
         """
-        logger = logging.getLogger(__name__)
         streams_done = [False] * len(ongoing_streams)
         tasks = []
 

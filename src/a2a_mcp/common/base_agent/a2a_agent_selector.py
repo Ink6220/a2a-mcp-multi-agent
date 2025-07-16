@@ -6,7 +6,7 @@ from a2a_mcp.common.card_discovery import A2ACardDiscovery
 
 class A2AAgentSelector:
     def __init__(self, agent_card: CustomAgentCard, card_discovery: A2ACardDiscovery, mcp_server: list=[]):
-        self.provider = agent_card.provider.organization
+        self.provider = agent_card.provider.organization if agent_card.provider else None
         self.agent_card = agent_card
         self.mcp_server = mcp_server
         self.card_discovery = card_discovery

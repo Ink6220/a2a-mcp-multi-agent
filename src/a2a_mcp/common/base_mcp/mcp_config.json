@@ -1,0 +1,23 @@
+{
+    "mcpServers": {
+      "sequential-thinking": {
+          "command": "npx",
+          "args": [
+            "-y",
+            "@modelcontextprotocol/server-sequential-thinking"
+          ]
+        },
+        "airbnb": {
+          "command": "npx",
+          "args": [
+            "-y",
+            "@openbnb/mcp-server-airbnb",
+            "--ignore-robots-txt"
+          ]
+        },
+        "wikipedia": {
+          "command": "wikipedia-mcp",
+          "args": ["--transport", "stdio", "--language", "en"]
+        }
+    }
+  } 

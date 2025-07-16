@@ -36,7 +36,7 @@ AWS_SECRET_ACCESS_KEY=
 ### Running the MCP Server
 
 ```bash
-# Start MCP server (default port 8000)
+# Start Agent discovery MCP server (default port 8000)
 uv run a2a-mcp --run mcp-server --transport sse
 ```
 
@@ -141,10 +141,104 @@ Here is an example choosing Openai agent (gpt-4.1-mini) as a Presale Agent role
     ],
     "modelName":"gpt-4.1-mini",
     "systemPrompt": "",
-    "nextAgent": ["http://localhost:10002/"]
+    "nextAgent": ["http://localhost:10002/"],
+    "mcp_servers": ["sequential-thinking", "airbnb", "wikipedia"]
 }
 ```
 
+### MCP Tool Server Configuration
+
+The framework supports selective MCP (Model Context Protocol) tool server integration. Each agent can specify which MCP tool servers it needs access to through the `mcp_servers` field in its agent card.
+
+#### Agent Card MCP Configuration
+
+Add the `mcp_servers` field to your agent card to specify which tool servers this agent should have access to:
+
+```json
+{
+    "name": "Orchestrator Agent",
+    "description": "Orchestrates task generation and execution",
+    "modelName": "gpt-4.1-mini",
+    "mcp_servers": ["sequential-thinking", "airbnb", "wikipedia", "google-calendar"]
+}
+```
+
+**Key Points:**
+- **Selective Access**: Only the MCP servers listed in `mcp_servers` will be loaded for this agent
+- **Security**: Agents only get access to explicitly requested tools (principle of least privilege)
+- **Performance**: Only necessary servers are initialized, improving startup time and resource usage
+- **Optional Field**: If `mcp_servers` is omitted or empty, no tool servers will be loaded (agent will only have access to the discovery server)
+
+#### Available MCP Tool Servers
+
+The available tool servers are configured in `src/a2a_mcp/common/base_mcp/mcp_config.json`:
+Here we define npx based MCP Tools to pass to the agent on top of the MCP tool for agent discovery
+
+```json
+{
+  "mcpServers": {
+    "sequential-thinking": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-sequential-thinking"]
+    },
+    "airbnb": {
+      "command": "npx",
+      "args": ["-y", "@openbnb/mcp-server-airbnb", "--ignore-robots-txt"]
+    },
+    "wikipedia": {
+      "command": "wikipedia-mcp",
+      "args": ["--transport", "stdio", "--language", "en"]
+    },
+    "google-calendar": {
+      "command": "npx",
+      "args": ["@cocal/google-calendar-mcp"],
+      "env": {
+        "GOOGLE_OAUTH_CREDENTIALS": "/path/to/oauth.keys.json"
+      }
+    }
+  }
+}
+```
+
+#### MCP Server Types
+
+The framework supports two types of MCP servers:
+
+1. **Discovery Server** (FilteredMCPServerSSE):
+   - Always loaded for all agents
+   - Handles agent discovery via `resource://agent_cards/list`
+   - Uses Server-Sent Events (SSE) transport
+
+2. **Tool Servers** (MCPServerStdio):
+   - Selectively loaded based on agent card configuration
+   - Provide specific tools and capabilities
+   - Use stdio transport with subprocess execution
+
+#### Example Configurations
+
+**Agent with Multiple Tools:**
+```json
+{
+    "name": "Research Agent",
+    "mcp_servers": ["sequential-thinking", "wikipedia", "google-calendar"]
+}
+```
+
+**Agent with No Tools:**
+```json
+{
+    "name": "Simple Agent",
+    "mcp_servers": []
+}
+```
+
+**Agent with Legacy Configuration (no mcp_servers field):**
+```json
+{
+    "name": "Legacy Agent"
+    // No mcp_servers field = no tool servers loaded
+}
+```
 
 ### Customize your MCP Server
 Navigate to **src/a2a_mcp/mcp/server.py**

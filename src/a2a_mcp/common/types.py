@@ -118,6 +118,7 @@ class CustomAgentCard(AgentCard):
     modelName: str = None
     systemPrompt: str = None
     nextAgent: List[str] = []
+    mcp_servers: List[str] = []
 
 class ToolCall(BaseModel):
     tool_name: str

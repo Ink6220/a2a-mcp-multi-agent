@@ -1,6 +1,6 @@
 {
-    "name": "PromoAdvisor Agent",
-    "description": "Present details, answer basic questions, log interest. Can only call this agent when customer tells that they available.",
+    "name": "Google Calendar Agent",
+    "description": "Give available time slots for the user, and book the appointments",
     "url": "http://localhost:10002/",
     "provider": {
         "organization": "openai",
@@ -29,21 +29,21 @@
     ],
     "skills": [
         {
-            "id": "check_car_brand",
-            "name": "Check car brand",
-            "description": "Check car brand from model name. require (model_name: str)",
+            "id": "Google Calendar Agent",
+            "name": "Google Calendar Agent",
+            "description": "Give available time slots for the user, and book the appointments",
             "tags": [
-                "Car Brand"
+                "Google Calendar"
             ],
             "examples": [
-                "{\"model_name\": มาสด้า}",
-                "{\"model_name\": โตโยต้า}"
+                "Add trip to London to my Calendar from 1 Jan to 10 Jan, this is the hotel link: https://www.airbnb.com/rooms/1234567890"
             ],
-            "inputModes": ["application/json"],
-            "outputModes": ["text/html"]
+            "inputModes": null,
+            "outputModes": null
         }
     ],
     "modelName":"gpt-4.1-mini",
     "systemPrompt": "",
-    "nextAgent": ["http://localhost:10001/"]
+    "nextAgent": [],
+    "mcp_servers": ["google-calendar"]
 }

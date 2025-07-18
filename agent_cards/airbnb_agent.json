@@ -1,23 +1,23 @@
 {
-    "name": "Langraph Planner Agent",
-    "description": "Helps breakdown a request in to actionable tasks",
-    "url": "http://localhost:10012/",
+    "name": "Airbnb Agent",
+    "description": "Given locations, find the best Airbnb listing based off price and location",
+    "url": "http://localhost:10/",
     "provider": {
         "organization": "openai",
         "url":"None"
     },
     "version": "1.0.0",
     "documentationUrl": null,
+    "capabilities": {
+        "streaming": "True",
+        "pushNotifications": "True",
+        "stateTransitionHistory": "False"
+    },
     "authentication": {
         "credentials": null,
         "schemes": [
             "public"
         ]
-    },
-    "capabilities": {
-        "streaming": "True",
-        "pushNotifications": "True",
-        "stateTransitionHistory": "False"
     },
     "defaultInputModes": [
         "text",
@@ -29,14 +29,14 @@
     ],
     "skills": [
         {
-            "id": "planner",
-            "name": "Task Planner",
-            "description": "Helps breakdown a request in to actionable tasks",
+            "id": "Airbnb Agent",
+            "name": "Airbnb Agent",
+            "description": "Given locations, find the best Airbnb listing based off price and location",
             "tags": [
-                "planner"
+                "Airbnb"
             ],
             "examples": [
-                "Plan my business trip from San Francisco to London, submit an expense report"
+                "Plan my trip to London, submit an expense report"
             ],
             "inputModes": null,
             "outputModes": null
@@ -44,5 +44,6 @@
     ],
     "modelName":"gpt-4.1-mini",
     "systemPrompt": "",
-    "nextAgent": ["http://localhost:10001/"]
+    "nextAgent": [],
+    "mcp_servers": ["airbnb"]
 }

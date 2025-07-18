@@ -37,38 +37,39 @@ class A2AOpenaiAgent(BaseAgent):
         super().__init__(agent_card.modelName, agent_card, card_discovery)  # Call BaseAgent's __init__
 
         self.mcp_server = mcp_server
-        self.agent = None
         self.context_stores = {}
 
-        # TODO: Still need memory manager here?
+        # Initialize the base agent once
+        instruction = self.root_instruction(chat_history="", agent_info="")
+        self.agent = Agent(
+            name=self.agent_card.name,
+            instructions=instruction,
+            model=self.model_name,
+            mcp_servers=self.mcp_server,
+            output_type=ResponseFormat,
+            model_settings=ModelSettings(temperature=0.0),
+        )
+        # Ensure agent is initialized
+        if not self.agent:
+            raise RuntimeError("Failed to initialize OpenAI agent")
+
         print("=============== Using Openai ===============")
 
-    def get_agent(self, history, agent_info):
-        instruction = self.root_instruction(chat_history=history, agent_info=agent_info)
-        # print(instruction)
-        return instruction, Agent(
-            name=self.agent_card.name,
-            instructions=instruction,
-            model=self.model_name,
-            mcp_servers=self.mcp_server,
-            output_type=ResponseFormat,
-            model_settings=ModelSettings(temperature=0.0),
+    def update_agent_instructions(self, history: str, agent_info: str, is_follow_up: bool = False) -> str:
+        """Update agent instructions while keeping the same agent instance"""
+        if not self.agent:
+            raise RuntimeError("Agent not initialized")
             
+        instruction = (
+            self.root_follow_up_instruction(chat_history=history, agent_info=agent_info)
+            if is_follow_up
+            else self.root_instruction(chat_history=history, agent_info=agent_info)
         )
-    
-    def get_follow_up_agent(self, history: str, agent_info: str):
-        instruction = self.root_follow_up_instruction(chat_history=history, agent_info=agent_info)
-        print(f"{Fore.BLUE}{instruction}{Style.RESET_ALL}")
-        return instruction, Agent(
-            name=self.agent_card.name,
-            instructions=instruction,
-            model=self.model_name,
-            mcp_servers=self.mcp_server,
-            output_type=ResponseFormat,
-            model_settings=ModelSettings(temperature=0.0),
-            
-        )
-    
+        if is_follow_up:
+            print(f"{Fore.BLUE}{instruction}{Style.RESET_ALL}")
+        self.agent.instructions = instruction
+        return instruction
+
     async def make_remote_agent_connection(
         self,
         target_agent_card: AgentCard, 
@@ -77,7 +78,7 @@ class A2AOpenaiAgent(BaseAgent):
         """Form a connection and stream messages to a remote agent, yielding events as they arrive."""
         
         async def _stream_connection():
-            async with httpx.AsyncClient(timeout=30) as httpx_client:
+            async with httpx.AsyncClient(timeout=60) as httpx_client:
                 agent_client = A2AClient(httpx_client, target_agent_card)
                 
                 # Check if agent supports streaming
@@ -125,7 +126,9 @@ class A2AOpenaiAgent(BaseAgent):
         return _stream_connection()
 
     async def invoke(self, query: str, context_id: str, task_id: str, context: Dict[str, Task]) -> ResponseFormat:
-        # TODO: maybe we should go through together on invoke(), if we are going to change response format etc (im not too clear on this)
+        if not self.agent:
+            raise RuntimeError("Agent not initialized")
+            
         usage_id = str(uuid4())
         result = None
         try:
@@ -133,8 +136,8 @@ class A2AOpenaiAgent(BaseAgent):
             
             #Generate agent result
             agent_info = self.card_discovery.get_remote_agent_info()
-            instruction, self.agent = self.get_agent(history, agent_info)
-            print(Fore.GREEN + Style.BRIGHT + "Init agent complete" + Style.RESET_ALL)
+            instruction = self.update_agent_instructions(history, agent_info, is_follow_up=False)
+            print(Fore.GREEN + Style.BRIGHT + "Updated agent instructions" + Style.RESET_ALL)
             print(Fore.BLUE + Style.BRIGHT + instruction + Style.RESET_ALL)
             start_time = time.time()
             result = await Runner.run(self.agent, query)
@@ -208,6 +211,9 @@ class A2AOpenaiAgent(BaseAgent):
             )
 
     async def follow_up_invoke(self, query: str, context_id: str, task_id: str, context: Dict[str, Task]) -> ResponseFormat:
+        if not self.agent:
+            raise RuntimeError("Agent not initialized")
+            
         usage_id = str(uuid4())
         result = None
         try:
@@ -215,10 +221,10 @@ class A2AOpenaiAgent(BaseAgent):
             
             #Generate agent result
             agent_info = self.card_discovery.get_remote_agent_info()
-            instruction, self.agent = self.get_follow_up_agent(history, agent_info)
-            print(Fore.GREEN + Style.BRIGHT + "Init agent complete" + Style.RESET_ALL)
+            instruction = self.update_agent_instructions(history, agent_info, is_follow_up=True)
+            print(Fore.GREEN + Style.BRIGHT + "Updated agent instructions" + Style.RESET_ALL)
             start_time = time.time()
-            result = await Runner.run(self.agent, query)
+            result = await Runner.run(self.agent, query, max_turns=20)
             print(Fore.GREEN + Style.BRIGHT + "[Runner.run]:" + Style.RESET_ALL, time.time() - start_time)
             print(result.raw_responses[0].usage)
             print(result.final_output)

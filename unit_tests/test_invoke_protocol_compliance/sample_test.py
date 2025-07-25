@@ -101,10 +101,34 @@ Available agents:
 
 ## ACTION SPACE
 [1] call_next_agent
-  Description: Delegate the task to appropriate agent that are available in DISCOVERY.
+  Description: Delegate tasks to one or more agents that are available in DISCOVERY. Tasks can be delegated in parallel.
   Parameters:
-    - agent_name (str): Name of the agent responsible for the current response.
-    - message (str): Message to another agent.
+    - agent_names (list[str]): List of agent names to delegate tasks to.
+    - next_agent_instructions (list[str]): List of instructions for each agent, must match length of agent_names.
+    - artifacts (str): Optional structured JSON data to be passed as artifacts; must be JSON-serializable.
+
+  Example (Single Agent):
+  {
+    "action": "call_next_agent",
+    "status": "input_required",
+    "message": "I will delegate this task to the Sales Agent",
+    "agent_names": ["Sales Agent"],
+    "next_agent_instructions": ["Please handle the customer inquiry about pricing"],
+    "artifacts": null
+  }
+
+  Example (Multiple Agents):
+  {
+    "action": "call_next_agent",
+    "status": "input_required",
+    "message": "I will delegate tasks to both the Sales and Support agents",
+    "agent_names": ["Sales Agent", "Support Agent"],
+    "next_agent_instructions": [
+      "Calculate the pricing for this customer",
+      "Check if there are any technical limitations"
+    ],
+    "artifacts": null
+  }
 
 [2] answer
   Description: Answer the question with current knowledge or using tools (if available).

@@ -9,11 +9,34 @@ Agents:
 
 ## ACTION SPACE
 [1] call_next_agent
-  Description: Delegate the task to appropriate agent that are available in DISCOVERY.
+  Description: Delegate tasks to one or more agents that are available in DISCOVERY. Tasks can be delegated in parallel.
   Parameters:
-    - agent_name (str): Name of the agent responsible for the current response.
-    - next_agent_instruction (str): Clear description of the task to be executed.
-    - artifacts (str): Optional structured JSON data to be passed as artifacts; must be JSON-serializable. As input data for the next agent (that exactly match to the example usage of the skill to be used) or additional structured response data.
+    - agent_names (list[str]): List of agent names to delegate tasks to.
+    - next_agent_instructions (list[str]): List of instructions for each agent, must match length of agent_names.
+    - artifacts (str): Optional structured JSON data to be passed as artifacts; must be JSON-serializable.
+
+  Example (Single Agent):
+  {{
+    "action": "call_next_agent",
+    "status": "input_required",
+    "message": "I will delegate this task to the Sales Agent",
+    "agent_names": ["Sales Agent"],
+    "next_agent_instructions": ["Please handle the customer inquiry about pricing"],
+    "artifacts": null
+  }}
+
+  Example (Multiple Agents):
+  {{
+    "action": "call_next_agent",
+    "status": "input_required",
+    "message": "I will delegate tasks to both the Sales and Support agents",
+    "agent_names": ["Sales Agent", "Support Agent"],
+    "next_agent_instructions": [
+      "Calculate the pricing for this customer",
+      "Check if there are any technical limitations"
+    ],
+    "artifacts": null
+  }}
 
 [2] answer
   Description: Answer the question with current knowledge or using tools (if available).
@@ -50,11 +73,34 @@ Agents:
 
 ## ACTION SPACE
 [1] call_next_agent
-  Description: Delegate the task to appropriate agent that are available in DISCOVERY, IF You think based on incoming Question cannot be resolved by current <chat_history> information (can delegate to the same agent).
+  Description: Delegate tasks to one or more agents that are available in DISCOVERY. Tasks can be delegated in parallel.
   Parameters:
-    - agent_name (str): Name of the agent responsible for the current response.
-    - next_agent_instruction (str): Clear description of the task to be executed.
-    - artifacts (str): Optional structured JSON data to be passed as artifacts; must be JSON-serializable. As input data for the next agent (that exactly match to the example usage of the skill to be used) or additional structured response data.
+    - agent_names (list[str]): List of agent names to delegate tasks to.
+    - next_agent_instructions (list[str]): List of instructions for each agent, must match length of agent_names.
+    - artifacts (str): Optional structured JSON data to be passed as artifacts; must be JSON-serializable.
+
+  Example (Single Agent):
+  {{
+    "action": "call_next_agent",
+    "status": "input_required",
+    "message": "I will delegate this task to the Sales Agent",
+    "agent_names": ["Sales Agent"],
+    "next_agent_instructions": ["Please handle the customer inquiry about pricing"],
+    "artifacts": null
+  }}
+
+  Example (Multiple Agents):
+  {{
+    "action": "call_next_agent",
+    "status": "input_required",
+    "message": "I will delegate tasks to both the Sales and Support agents",
+    "agent_names": ["Sales Agent", "Support Agent"],
+    "next_agent_instructions": [
+      "Calculate the pricing for this customer",
+      "Check if there are any technical limitations"
+    ],
+    "artifacts": null
+  }}
 
 [2] answer
   Description: Answer the question with current knowledge or using tools (if available) together with <chat_history> information.
@@ -92,11 +138,34 @@ Agents:
 
 ## ACTION SPACE
 [1] call_next_agent
-  Description: Delegate the task to appropriate agent that are available in DISCOVERY.
+  Description: Delegate tasks to one or more agents that are available in DISCOVERY. Tasks can be delegated in parallel.
   Parameters:
-    - agent_name (str): Name of the agent responsible for the current response.
-    - next_agent_instruction (str): Clear description of the task to be executed.
-    - artifacts (str): Optional structured JSON data to be passed as artifacts; must be JSON-serializable. As input data for the next agent (that exactly match to the example usage of the skill to be used) or additional structured response data.
+    - agent_names (list[str]): List of agent names to delegate tasks to.
+    - next_agent_instructions (list[str]): List of instructions for each agent, must match length of agent_names.
+    - artifacts (str): Optional structured JSON data to be passed as artifacts; must be JSON-serializable.
+
+  Example (Single Agent):
+  <output>
+    <action>call_next_agent</action>
+    <status>input_required</status>
+    <message>I will delegate this task to the Sales Agent</message>
+    <agent_names>["Sales Agent"]</agent_names>
+    <next_agent_instructions>["Please handle the customer inquiry about pricing"]</next_agent_instructions>
+    <artifacts>null</artifacts>
+  </output>
+
+  Example (Multiple Agents):
+  <output>
+    <action>call_next_agent</action>
+    <status>input_required</status>
+    <message>I will delegate tasks to both the Sales and Support agents</message>
+    <agent_names>["Sales Agent", "Support Agent"]</agent_names>
+    <next_agent_instructions>[
+      "Calculate the pricing for this customer",
+      "Check if there are any technical limitations"
+    ]</next_agent_instructions>
+    <artifacts>null</artifacts>
+  </output>
 
 [2] answer
   Description: Answer the question with current knowledge or using tools (if available).
@@ -123,9 +192,9 @@ Make sure your final response is a valid XML schema follow the below Response Sc
     <action>( Action to be taken, either respond directly or delegate to another agent. Literal["answer", "call_next_agent"] )</action>
     <status>( Literal['input_required', 'completed', 'error', 'hang_up'] )</status>
     <custom_status>( Optional custom state such as 'hang_up', 'timeout', etc. for extended flow semantics. Default as ' ' )</custom_status>
-    <agent_name>( Name of the agent responsible for the current response from available remote agent, if action is call_next_agent.)</agent_name>
+    <agent_names>( List of agent names to delegate tasks to, required if action is 'call_next_agent'. Each agent will be called in parallel. )</agent_names>
     <message>( The message to deliver to the user or to another agent. )</message>
-    <next_agent_instruction>( Message content, passed to the next agent as an instruction TODO )</next_agent_instruction>
+    <next_agent_instructions>( List of instructions for each agent. Must match length of agent_names. )</next_agent_instructions>
     <artifacts>( Schema-compatible dictionary containing input data for the next agent, if applicable. )</artifacts>
 </output>
 """
@@ -141,11 +210,34 @@ Agents:
 
 ## ACTION SPACE
 [1] call_next_agent
-  Description: Delegate the task to appropriate agent that are available in DISCOVERY, IF You think based on incoming Question cannot be resolved by current <chat_history> information (can delegate to the same agent).
+  Description: Delegate tasks to one or more agents that are available in DISCOVERY. Tasks can be delegated in parallel.
   Parameters:
-    - agent_name (str): Name of the agent responsible for the current response.
-    - next_agent_instruction (str): Clear description of the task to be executed.
-    - artifacts (str): Optional structured JSON data to be passed as artifacts; must be JSON-serializable. As input data for the next agent (that exactly match to the example usage of the skill to be used) or additional structured response data.
+    - agent_names (list[str]): List of agent names to delegate tasks to.
+    - next_agent_instructions (list[str]): List of instructions for each agent, must match length of agent_names.
+    - artifacts (str): Optional structured JSON data to be passed as artifacts; must be JSON-serializable.
+
+  Example (Single Agent):
+  <output>
+    <action>call_next_agent</action>
+    <status>input_required</status>
+    <message>I will delegate this task to the Sales Agent</message>
+    <agent_names>["Sales Agent"]</agent_names>
+    <next_agent_instructions>["Please handle the customer inquiry about pricing"]</next_agent_instructions>
+    <artifacts>null</artifacts>
+  </output>
+
+  Example (Multiple Agents):
+  <output>
+    <action>call_next_agent</action>
+    <status>input_required</status>
+    <message>I will delegate tasks to both the Sales and Support agents</message>
+    <agent_names>["Sales Agent", "Support Agent"]</agent_names>
+    <next_agent_instructions>[
+      "Calculate the pricing for this customer",
+      "Check if there are any technical limitations"
+    ]</next_agent_instructions>
+    <artifacts>null</artifacts>
+  </output>
 
 [2] answer
   Description: Answer the question with current knowledge or using tools (if available) together with <chat_history> information.
@@ -173,9 +265,9 @@ Make sure your final response is a valid XML schema follow the below Response Sc
     <action>( Action to be taken, either respond directly or delegate to another agent. Literal["answer", "call_next_agent"] )</action>
     <status>( Literal['input_required', 'completed', 'error', 'hang_up'] )</status>
     <custom_status>( Optional custom state such as 'hang_up', 'timeout', etc. for extended flow semantics. Default as ' ' )</custom_status>
-    <agent_name>( Name of the agent responsible for the current response from available remote agent, if action is call_next_agent.)</agent_name>
+    <agent_names>( List of agent names to delegate tasks to, required if action is 'call_next_agent'. Each agent will be called in parallel. )</agent_names>
     <message>( The message to deliver to the user or to another agent. )</message>
-    <next_agent_instruction>( Message content, passed to the next agent as an instruction TODO )</next_agent_instruction>
+    <next_agent_instructions>( List of instructions for each agent. Must match length of agent_names. )</next_agent_instructions>
     <artifacts>( Schema-compatible dictionary containing input data for the next agent, if applicable. )</artifacts>
 </output>
 """
@@ -191,11 +283,34 @@ Agents:
 
 ## ACTION SPACE
 [1] call_next_agent
-  Description: Delegate the task to appropriate agent that are available in DISCOVERY.
+  Description: Delegate tasks to one or more agents that are available in DISCOVERY. Tasks can be delegated in parallel.
   Parameters:
-    - agent_name (str): Name of the agent responsible for the current response.
-    - next_agent_instruction (str): Clear description of the task to be executed.
-    - artifacts (str): Optional structured JSON data to be passed as artifacts; must be JSON-serializable. As input data for the next agent (that exactly match to the example usage of the skill to be used) or additional structured response data.
+    - agent_names (list[str]): List of agent names to delegate tasks to.
+    - next_agent_instructions (list[str]): List of instructions for each agent, must match length of agent_names.
+    - artifacts (str): Optional structured JSON data to be passed as artifacts; must be JSON-serializable.
+
+  Example (Single Agent):
+  <output>
+    <action>call_next_agent</action>
+    <status>input_required</status>
+    <message>I will delegate this task to the Sales Agent</message>
+    <agent_names>["Sales Agent"]</agent_names>
+    <next_agent_instructions>["Please handle the customer inquiry about pricing"]</next_agent_instructions>
+    <artifacts>null</artifacts>
+  </output>
+
+  Example (Multiple Agents):
+  <output>
+    <action>call_next_agent</action>
+    <status>input_required</status>
+    <message>I will delegate tasks to both the Sales and Support agents</message>
+    <agent_names>["Sales Agent", "Support Agent"]</agent_names>
+    <next_agent_instructions>[
+      "Calculate the pricing for this customer",
+      "Check if there are any technical limitations"
+    ]</next_agent_instructions>
+    <artifacts>null</artifacts>
+  </output>
 
 [2] answer
   Description: Answer the question with current knowledge or using tools (if available).
@@ -231,9 +346,9 @@ Make sure your final response is a valid XML schema follow the below Response Sc
     <action>( Action to be taken, either respond directly or delegate to another agent. Literal["answer", "call_next_agent"] )</action>
     <status>( Literal['input_required', 'completed', 'error', 'hang_up'] )</status>
     <custom_status>( Optional custom state such as 'hang_up', 'timeout', etc. for extended flow semantics. Default as ' ' )</custom_status>
-    <agent_name>( Name of the agent responsible for the current response from available remote agent, if action is call_next_agent.)</agent_name>
+    <agent_names>( List of agent names to delegate tasks to, required if action is 'call_next_agent'. Each agent will be called in parallel. )</agent_names>
     <message>( The message to deliver to the user or to another agent. )</message>
-    <next_agent_instruction>( Message content, passed to the next agent as an instruction TODO )</next_agent_instruction>
+    <next_agent_instructions>( List of instructions for each agent. Must match length of agent_names. )</next_agent_instructions>
     <artifacts>( Schema-compatible dictionary containing input data for the next agent, if applicable. )</artifacts>
 </output>
 """
@@ -249,11 +364,34 @@ Agents:
 
 ## ACTION SPACE
 [1] call_next_agent
-  Description: Delegate the task to appropriate agent that are available in DISCOVERY, IF You think based on incoming Question cannot be resolved by current <chat_history> information (can delegate to the same agent).
+  Description: Delegate tasks to one or more agents that are available in DISCOVERY. Tasks can be delegated in parallel.
   Parameters:
-    - agent_name (str): Name of the agent responsible for the current response.
-    - next_agent_instruction (str): Clear description of the task to be executed.
-    - artifacts (str): Optional structured JSON data to be passed as artifacts; must be JSON-serializable. As input data for the next agent (that exactly match to the example usage of the skill to be used) or additional structured response data.
+    - agent_names (list[str]): List of agent names to delegate tasks to.
+    - next_agent_instructions (list[str]): List of instructions for each agent, must match length of agent_names.
+    - artifacts (str): Optional structured JSON data to be passed as artifacts; must be JSON-serializable.
+
+  Example (Single Agent):
+  <output>
+    <action>call_next_agent</action>
+    <status>input_required</status>
+    <message>I will delegate this task to the Sales Agent</message>
+    <agent_names>["Sales Agent"]</agent_names>
+    <next_agent_instructions>["Please handle the customer inquiry about pricing"]</next_agent_instructions>
+    <artifacts>null</artifacts>
+  </output>
+
+  Example (Multiple Agents):
+  <output>
+    <action>call_next_agent</action>
+    <status>input_required</status>
+    <message>I will delegate tasks to both the Sales and Support agents</message>
+    <agent_names>["Sales Agent", "Support Agent"]</agent_names>
+    <next_agent_instructions>[
+      "Calculate the pricing for this customer",
+      "Check if there are any technical limitations"
+    ]</next_agent_instructions>
+    <artifacts>null</artifacts>
+  </output>
 
 [2] answer
   Description: Answer the question with current knowledge or using tools (if available) together with <chat_history> information.
@@ -290,9 +428,9 @@ Make sure your final response is a valid XML schema follow the below Response Sc
     <action>( Action to be taken, either respond directly or delegate to another agent. Literal["answer", "call_next_agent"] )</action>
     <status>( Literal['input_required', 'completed', 'error', 'hang_up'] )</status>
     <custom_status>( Optional custom state such as 'hang_up', 'timeout', etc. for extended flow semantics. Default as ' ' )</custom_status>
-    <agent_name>( Name of the agent responsible for the current response from available remote agent, if action is call_next_agent.)</agent_name>
+    <agent_names>( List of agent names to delegate tasks to, required if action is 'call_next_agent'. Each agent will be called in parallel. )</agent_names>
     <message>( The message to deliver to the user or to another agent. )</message>
-    <next_agent_instruction>( Message content, passed to the next agent as an instruction TODO )</next_agent_instruction>
+    <next_agent_instructions>( List of instructions for each agent. Must match length of agent_names. )</next_agent_instructions>
     <artifacts>( Schema-compatible dictionary containing input data for the next agent, if applicable. )</artifacts>
 </output>
 """

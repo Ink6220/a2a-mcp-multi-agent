@@ -31,19 +31,32 @@ class LLMBehaviorTester:
                 "action": "answer",
                 "status": "completed",
                 "required_fields": ["message"],
-                "forbidden_fields": ["agent_name", "next_agent_instruction"]
+                "forbidden_fields": ["agent_names", "next_agent_instructions"]
             }
         },
         {
-            "name": "Delegation State",
+            "name": "Single Delegation State",
             "query": "I need a JSON return, this can be done by the test-agent-2",
             "expected_state": {
                 "action": "call_next_agent",
                 "status": "input_required",
-                "required_fields": ["message", "agent_name", "next_agent_instruction"],
+                "required_fields": ["message", "agent_names", "next_agent_instructions"],
                 "field_requirements": {
-                    "agent_name": lambda x: bool(x and len(x) > 0),
-                    "next_agent_instruction": lambda x: bool(x and len(x) > 0)
+                    "agent_names": lambda x: bool(x and len(x) > 0 and isinstance(x, list)),
+                    "next_agent_instructions": lambda x: bool(x and len(x) > 0 and isinstance(x, list) and len(x) == 1)
+                }
+            }
+        },
+        {
+            "name": "Parallel Delegation State",
+            "query": "This task needs both test-agent-1 and test-agent-2 working together",
+            "expected_state": {
+                "action": "call_next_agent",
+                "status": "input_required",
+                "required_fields": ["message", "agent_names", "next_agent_instructions"],
+                "field_requirements": {
+                    "agent_names": lambda x: bool(x and len(x) > 1 and isinstance(x, list)),
+                    "next_agent_instructions": lambda x, response=None: bool(x and len(x) > 1 and isinstance(x, list) and (response is None or len(x) == len(response.agent_names)))
                 }
             }
         },
@@ -54,7 +67,7 @@ class LLMBehaviorTester:
                 "action": "answer",
                 "status": "input_required",
                 "required_fields": ["message"],
-                "forbidden_fields": ["agent_name", "next_agent_instruction"]
+                "forbidden_fields": ["agent_names", "next_agent_instructions"]
             }
         },
         {
@@ -108,8 +121,15 @@ class LLMBehaviorTester:
         # Check field requirements
         if "field_requirements" in expected_state:
             for field, validator in expected_state["field_requirements"].items():
-                if not validator(getattr(response, field, None)):
-                    issues.append(f"Field validation failed: {field}")
+                value = getattr(response, field, None)
+                try:
+                    # Try to pass both value and response to validator
+                    if not validator(value, response):
+                        issues.append(f"Field validation failed: {field}")
+                except TypeError:
+                    # If validator doesn't accept response parameter, just pass value
+                    if not validator(value):
+                        issues.append(f"Field validation failed: {field}")
         
         return {
             "valid": len(issues) == 0,
@@ -154,8 +174,8 @@ class LLMBehaviorTester:
                             'action': response.action,
                             'status': response.status,
                             'message': response.message[:100] + '...' if len(response.message) > 100 else response.message,
-                            'agent_name': getattr(response, 'agent_name', None),
-                            'next_agent_instruction': getattr(response, 'next_agent_instruction', None),
+                            'agent_names': getattr(response, 'agent_names', None),
+                            'next_agent_instructions': getattr(response, 'next_agent_instructions', None),
                             'artifacts': getattr(response, 'artifacts', None),
                             'custom_status': getattr(response, 'custom_status', None)
                         }
@@ -191,7 +211,10 @@ def print_behavior_report(results: Dict[str, Any]) -> None:
                 print("\nResponse State:")
                 for key, value in failure['response'].items():
                     if value is not None:
-                        print(f"  {key}: {value}")
+                        if key in ['agent_names', 'next_agent_instructions'] and isinstance(value, list):
+                            print(f"  {key}: {', '.join(str(v) for v in value)}")
+                        else:
+                            print(f"  {key}: {value}")
             # Print the full raw response if available
             if 'raw_response' in failure:
                 print("\nFull Raw Response:")

@@ -181,16 +181,17 @@ class A2AOpenaiAgent(BaseAgent):
                 )
             # Convert result to ResponseFormat
             try:
+                # ResponseFormat is already enforced through output_type=ResponseFormat
                 return result.final_output
+
             except ValidationError as ve:
                 print("Validation error while formatting response:", ve)
                 return ResponseFormat(
                     action="answer",
-                    status="failed",
-                    custom_status="",
+                    status="failed", 
                     message="The response format was invalid.",
-                    agent_name=None,
-                    next_agent_instruction=None,
+                    agent_names=None,
+                    next_agent_instructions=None,
                     artifacts=None
                 )
 
@@ -200,10 +201,9 @@ class A2AOpenaiAgent(BaseAgent):
             return ResponseFormat(
                 action="answer",
                 status="input_required",
-                custom_status="",
                 message="We are unable to process your request at the moment. Please try again.",
-                agent_name=None,
-                next_agent_instruction=None,
+                agent_names=None,
+                next_agent_instructions=None,
                 artifacts=None
             )
 
@@ -249,23 +249,31 @@ class A2AOpenaiAgent(BaseAgent):
                     context_id=context_id,
                     task_id=task_id,
                     query=query,
-                    result=result,
-                    api_usage=api_usage,
+                    result=result.final_output,
+                    api_usage=ApiUsage(
+                        prompt_tokens=api_usage.input_tokens,
+                        completion_tokens=api_usage.output_tokens,
+                        extra_usage=ExtraUsage(
+                            reasoning_tokens=api_usage.input_tokens_details.cached_tokens, 
+                            cache_tokens=api_usage.output_tokens_details.reasoning_tokens
+                        ),
+                    ),
                     tool_calls=tool_calls,
                     tool_outputs=tool_outputs            
                 )
             # Convert result to ResponseFormat
             try:
+                # ResponseFormat is already enforced through output_type=ResponseFormat
                 return result.final_output
+
             except ValidationError as ve:
                 print("Validation error while formatting response:", ve)
                 return ResponseFormat(
                     action="answer",
-                    status="failed",
-                    custom_status="",
+                    status="failed", 
                     message="The response format was invalid.",
-                    agent_name=None,
-                    next_agent_instruction=None,
+                    agent_names=None,
+                    next_agent_instructions=None,
                     artifacts=None
                 )
 
@@ -275,146 +283,145 @@ class A2AOpenaiAgent(BaseAgent):
             return ResponseFormat(
                 action="answer",
                 status="input_required",
-                custom_status="",
                 message="We are unable to process your request at the moment. Please try again.",
-                agent_name=None,
-                next_agent_instruction=None,
+                agent_names=None,
+                next_agent_instructions=None,
                 artifacts=None
             )
 
-    async def stream(self, query: str, context_id: str, task_id: str) -> AsyncGenerator[Dict[str, Any], None]:
 
-        history = "" # TODO: Load Memory
-        agent_info = self.card_discovery.get_remote_agent_info()
-        self.agent = self.get_agent(history, agent_info)
+# Stream method currently deprecated
+    # async def stream(self, query: str, context_id: str, task_id: str) -> AsyncGenerator[Dict[str, Any], None]:
+    #     history = "" # TODO: Load Memory
+    #     agent_info = self.card_discovery.get_remote_agent_info()
+    #     instruction, self.agent = self.get_agent(history, agent_info)
 
-        result = Runner.run_streamed(self.agent, input=query)
-        raw_json_chunks = ""
-        message_content = ""
+    #     result = Runner.run_streamed(self.agent, input=query)
+    #     raw_json_chunks = ""
+    #     message_content = ""
         
-        async for event in result.stream_events():
-            if event.type == "raw_response_event" and isinstance(event.data, ResponseTextDeltaEvent):
-                chunk = event.data.delta
-                raw_json_chunks += chunk
+    #     async for event in result.stream_events():
+    #         if event.type == "raw_response_event" and isinstance(event.data, ResponseTextDeltaEvent):
+    #             chunk = event.data.delta
+    #             raw_json_chunks += chunk
                 
-                # Found first json object --is-> Generate complete
-                # Sometimes there is a chance that it generate duplicate answer {"status": ..., "message": ...}{"status": ..., "message": ...}
-                first_json = self.parse_structure_output(raw_json_chunks)
-                if isinstance(first_json, str) and first_json != "":
-                    print(f"\nExtracted {raw_json_chunks} -> {first_json}\n")
-                    raw_json_chunks = first_json
-                    break
+    #             # Found first json object --is-> Generate complete
+    #             # Sometimes there is a chance that it generate duplicate answer {"status": ..., "message": ...}{"status": ..., "message": ...}
+    #             first_json = self.parse_structure_output(raw_json_chunks)
+    #             if isinstance(first_json, str) and first_json != "":
+    #                 print(f"\nExtracted {raw_json_chunks} -> {first_json}\n")
+    #                 raw_json_chunks = first_json
+    #                 break
 
-                # Try to extract structured content as we go
-                try:
-                    # As we receive chunks, try to parse what we've received so far
+    #             # Try to extract structured content as we go
+    #             try:
+    #                 # As we receive chunks, try to parse what we've received so far
 
-                    # If we found that agent decide to forward task to another agent, we will wait for complete response.
-                    if 'call_next_agent' in raw_json_chunks:
-                        continue
+    #                 # If we found that agent decide to forward task to another agent, we will wait for complete response.
+    #                 if 'call_next_agent' in raw_json_chunks:
+    #                     continue
 
-                    # This is a simple approach - we're looking for "message":"content" patterns
-                    if '"message":"' in raw_json_chunks or '"message":' in raw_json_chunks:
-                        # If we find a new piece of the message field
-                        new_content = self._extract_message_content(chunk)
-                        if new_content:
-                            message_content += new_content
-                            yield {
-                                "is_task_complete": False,
-                                "require_user_input": False,
-                                "content": new_content,
-                                "hang_up": False,
-                                "call_next_agent": False,
-                                "agent_name": ""
-                            }
-                except:
-                    # If parsing fails, continue collecting chunks
-                    pass
-            elif event.type == "agent_updated_stream_event":
-                print(f"Agent updated: {event.new_agent.name}")
-                continue
-            # When items are generated, print them
-            elif event.type == "run_item_stream_event":
-                if event.item.type == "tool_call_item":
-                    print("-- Tool was called")
-                    response_function_tool_call = event.item.raw_item
-                    # Safely access attributes that might not exist on all tool call types (returns none if attribute doesnt exist )
-                    arguments = getattr(response_function_tool_call, 'arguments', None)
-                    call_id = getattr(response_function_tool_call, 'call_id', None)
-                    tool_name = getattr(response_function_tool_call, 'name', None)
-                    tool_status = getattr(response_function_tool_call, 'status', None)
+    #                 # This is a simple approach - we're looking for "message":"content" patterns
+    #                 if '"message":"' in raw_json_chunks or '"message":' in raw_json_chunks:
+    #                     # If we find a new piece of the message field
+    #                     new_content = self._extract_message_content(chunk)
+    #                     if new_content:
+    #                         message_content += new_content
+    #                         yield {
+    #                             "is_task_complete": False,
+    #                             "require_user_input": False,
+    #                             "content": new_content,
+    #                             "hang_up": False,
+    #                             "call_next_agent": False,
+    #                             "agent_names": []
+    #                         }
+    #             except:
+    #                 # If parsing fails, continue collecting chunks
+    #                 pass
+    #         elif event.type == "agent_updated_stream_event":
+    #             print(f"Agent updated: {event.new_agent.name}")
+    #             continue
+    #         # When items are generated, print them
+    #         elif event.type == "run_item_stream_event":
+    #             if event.item.type == "tool_call_item":
+    #                 print("-- Tool was called")
+    #                 response_function_tool_call = event.item.raw_item
+    #                 # Safely access attributes that might not exist on all tool call types (returns none if attribute doesnt exist )
+    #                 arguments = getattr(response_function_tool_call, 'arguments', None)
+    #                 call_id = getattr(response_function_tool_call, 'call_id', None)
+    #                 tool_name = getattr(response_function_tool_call, 'name', None)
+    #                 tool_status = getattr(response_function_tool_call, 'status', None)
 
-                    print(arguments, call_id, tool_name, tool_status)
-                elif event.item.type == "tool_call_output_item":
-                    print(f"-- Tool output: {event.item.output}")
-                    raw_item = event.item.raw_item
-                    call_id = raw_item.get('call_id') if isinstance(raw_item, dict) else None # improves type safety
-                    if isinstance(raw_item, dict) and 'output' in raw_item:
-                        try:
-                            output_value = raw_item['output']
-                            # Ensure we have a string for json.loads
-                            if isinstance(output_value, str):
-                                output = json.loads(output_value)['text']
-                            else:
-                                output = str(output_value)
-                        except (json.JSONDecodeError, KeyError):
-                            output = str(raw_item['output'])
+    #                 print(arguments, call_id, tool_name, tool_status)
+    #             elif event.item.type == "tool_call_output_item":
+    #                 print(f"-- Tool output: {event.item.output}")
+    #                 raw_item = event.item.raw_item
+    #                 call_id = raw_item.get('call_id') if isinstance(raw_item, dict) else None # improves type safety
+    #                 if isinstance(raw_item, dict) and 'output' in raw_item:
+    #                     try:
+    #                         output_value = raw_item['output']
+    #                         # Ensure we have a string for json.loads
+    #                         if isinstance(output_value, str):
+    #                             output = json.loads(output_value)['text']
+    #                         else:
+    #                             output = str(output_value)
+    #                     except (json.JSONDecodeError, KeyError):
+    #                         output = str(raw_item['output'])
 
-                elif event.item.type == "message_output_item":
-                    print(f"-- Message output:\n {ItemHelpers.text_message_output(event.item)}")
-                else:
-                    pass  # Ignore other event types
+    #             elif event.item.type == "message_output_item":
+    #                 print(f"-- Message output:\n {ItemHelpers.text_message_output(event.item)}")
+    #             else:
+    #                 pass  # Ignore other event types
         
-        # At the end, parse the complete response to get the final status
-        try:
-            # First try to get a valid JSON string from parse_structure_output
-            structured_output = self.parse_structure_output(raw_json_chunks)
-            if isinstance(structured_output, str) and structured_output: #type safety check
-                parsed_response = json.loads(structured_output)
-            else:
-                # Fallback to parsing raw_json_chunks directly
-                parsed_response = json.loads(raw_json_chunks)
+    #     # At the end, parse the complete response to get the final status
+    #     try:
+    #         # First try to get a valid JSON string from parse_structure_output
+    #         structured_output = self.parse_structure_output(raw_json_chunks)
+    #         if isinstance(structured_output, str) and structured_output: #type safety check
+    #             parsed_response = json.loads(structured_output)
+    #         else:
+    #             # Fallback to parsing raw_json_chunks directly
+    #             parsed_response = json.loads(raw_json_chunks)
                 
-            print("parsed_response => ", parsed_response)
-            action = parsed_response.get("action", "answer")
-            status = parsed_response.get("status", "input_required")
-            agent_name = parsed_response.get("agent_name", "")
-            
-            # TODO: Shold we save conversation history here ? 
+    #         print("parsed_response => ", parsed_response)
+    #         action = parsed_response.get("action", "answer")
+    #         status = parsed_response.get("status", "input_required")
+    #         agent_names = parsed_response.get("agent_names", [])
 
-            # Determine if we need user input or should hang up based on status
-            require_input = status == "input_required"
-            hang_up = status == "hang_up"
+    #         # Determine if we need user input or should hang up based on status
+    #         require_input = status == "input_required"
+    #         hang_up = status == "hang_up"
 
-            if action == "call_next_agent":
-                yield {
-                    "is_task_complete": True,
-                    "require_user_input": False,
-                    "content": parsed_response['message'],
-                    "hang_up": False,
-                    "call_next_agent": True,
-                    "agent_name": agent_name
-                }
-            else:                yield {
-                    "is_task_complete": True,
-                    "require_user_input": require_input,
-                    "content": parsed_response['message'],
-                    "hang_up": hang_up,
-                    "call_next_agent": False,
-                    "agent_name": ""
-                }
-        except json.JSONDecodeError:
-            print("json.JSONDecodeError: ", raw_json_chunks)
-            print("\n", message_content)
-            # If we can't parse the final JSON, return what we have
-            yield {
-                "is_task_complete": True,
-                "require_user_input": False,
-                "content": message_content,
-                "hang_up": False,
-                "call_next_agent": False,
-                "agent_name": ""
-            }
+    #         if action == "call_next_agent":
+    #             yield {
+    #                 "is_task_complete": True,
+    #                 "require_user_input": False,
+    #                 "content": parsed_response['message'],
+    #                 "hang_up": False,
+    #                 "call_next_agent": True,
+    #                 "agent_names": agent_names
+    #             }
+    #         else:
+    #             yield {
+    #                 "is_task_complete": True,
+    #                 "require_user_input": require_input,
+    #                 "content": parsed_response['message'],
+    #                 "hang_up": hang_up,
+    #                 "call_next_agent": False,
+    #                 "agent_names": []
+    #             }
+    #     except json.JSONDecodeError:
+    #         print("json.JSONDecodeError: ", raw_json_chunks)
+    #         print("\n", message_content)
+    #         # If we can't parse the final JSON, return what we have
+    #         yield {
+    #             "is_task_complete": True,
+    #             "require_user_input": False,
+    #             "content": message_content,
+    #             "hang_up": False,
+    #             "call_next_agent": False,
+    #             "agent_names": []
+    #         }
     
     def _extract_message_content(self, chunk):
         """Helper method to extract relevant message content from a chunk"""
@@ -455,11 +462,29 @@ class A2AOpenaiAgent(BaseAgent):
     
     def root_instruction(self, chat_history: str, tools: Any = None, agent_info: Any = None) -> str:
         prompt = self.agent_card.systemPrompt or "You are a helpful assistant."
-        return A2A_OPENAI_BASE_PROMPT.format(agent_name=self.agent_card.name, system_prompt=prompt, chat_history=chat_history, agent_info=agent_info)
+        # Escape curly braces in dynamic content to prevent format errors
+        safe_chat_history = chat_history.replace('{', '{{').replace('}', '}}') if chat_history else ""
+        safe_agent_info = agent_info.replace('{', '{{').replace('}', '}}') if agent_info else ""
+        
+        return A2A_OPENAI_BASE_PROMPT.format(
+            agent_name=self.agent_card.name, 
+            system_prompt=prompt, 
+            chat_history=safe_chat_history, 
+            agent_info=safe_agent_info
+        )
 
     def root_follow_up_instruction(self, chat_history: str, tools: Any = None, agent_info: Any = None) -> str:
         prompt = self.agent_card.systemPrompt or "You are a helpful assistant."
-        return A2A_OPENAI_FOLLOW_UP_BASE_PROMPT.format(agent_name=self.agent_card.name, system_prompt=prompt, chat_history=chat_history, agent_info=agent_info)
+        # Escape curly braces in dynamic content to prevent format errors
+        safe_chat_history = chat_history.replace('{', '{{').replace('}', '}}') if chat_history else ""
+        safe_agent_info = agent_info.replace('{', '{{').replace('}', '}}') if agent_info else ""
+        
+        return A2A_OPENAI_FOLLOW_UP_BASE_PROMPT.format(
+            agent_name=self.agent_card.name, 
+            system_prompt=prompt, 
+            chat_history=safe_chat_history, 
+            agent_info=safe_agent_info
+        )
 
     def _extract_tool_calls_and_outputs(self, result) -> tuple[list[ToolCall], list[ToolOutput]]:
         tool_calls = []

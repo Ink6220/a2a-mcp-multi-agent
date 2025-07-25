@@ -25,9 +25,8 @@ class ResponseFormat(MockBaseModel):
     
     # Optional fields
     custom_status: Optional[str] = None
-    agent_name: Optional[str] = None
-    next_agent_instruction: Optional[str] = None
-    next_agent_schema: Optional[Dict[str, Any]] = None
+    agent_names: Optional[list[str]] = None
+    next_agent_instructions: Optional[list[str]] = None
     artifacts: Optional[str] = None
 
 
@@ -111,8 +110,8 @@ def get_delegation_agent() -> MockAgent:
         "action": "call_next_agent",
         "status": "input_required",
         "message": "Delegating task to specialist-agent.",
-        "agent_name": "specialist-agent",
-        "next_agent_instruction": "Please handle this specialized request"
+        "agent_names": ["specialist-agent"],
+        "next_agent_instructions": ["Please handle this specialized request"]
     })
 
 def get_failed_agent() -> MockAgent:
@@ -136,4 +135,17 @@ def get_error_agent() -> MockAgent:
             raise ValueError("Simulated agent error")
     
     # The response data here is irrelevant since invoke will raise an error
-    return ErrorAgent({"action": "answer", "status": "failed", "message": "This will not be returned"}) 
+    return ErrorAgent({"action": "answer", "status": "failed", "message": "This will not be returned"})
+
+def get_parallel_delegation_agent() -> MockAgent:
+    """Returns an agent that simulates delegating to multiple agents in parallel."""
+    return MockAgent({
+        "action": "call_next_agent",
+        "status": "input_required",
+        "message": "Delegating task to multiple specialist agents.",
+        "agent_names": ["specialist-agent-1", "specialist-agent-2"],
+        "next_agent_instructions": [
+            "Please handle part 1 of the request",
+            "Please handle part 2 of the request"
+        ]
+    }) 

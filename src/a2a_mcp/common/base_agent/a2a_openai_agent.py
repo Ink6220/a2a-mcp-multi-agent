@@ -7,7 +7,7 @@ import json
 import re
 import xml.etree.ElementTree as ET
 import os
-from typing import Any, Dict, Literal, Union, AsyncGenerator
+from typing import Any, Dict, Literal, Union, AsyncGenerator, Optional
 from collections.abc import AsyncIterable
 from dotenv import load_dotenv
 load_dotenv()
@@ -33,15 +33,14 @@ from pydantic import ValidationError
 import httpx
 from uuid import uuid4
 class A2AOpenaiAgent(BaseAgent):
-    def __init__(self, agent_card: CustomAgentCard, card_discovery: A2ACardDiscovery, mcp_server: list=[]):
-        super().__init__(agent_card.modelName, agent_card, card_discovery)  # Call BaseAgent's __init__
+    def __init__(self, agent_card: CustomAgentCard, card_discovery: A2ACardDiscovery, mcp_server: list=[], litellm_model: Optional[str] = None):
+        super().__init__(agent_card.modelName, agent_card, card_discovery, litellm_model)  # Call BaseAgent's __init__
 
         self.mcp_server = mcp_server
         self.agent = None
         self.context_stores = {}
 
-        # TODO: Still need memory manager here?
-        print("=============== Using Openai ===============")
+        print(f"=============== Using Unified Agent with {self.litellm_model} (original: {self.model_name}) ===============")
 
     def get_agent(self, history, agent_info):
         instruction = self.root_instruction(chat_history=history, agent_info=agent_info)
@@ -49,7 +48,7 @@ class A2AOpenaiAgent(BaseAgent):
         return instruction, Agent(
             name=self.agent_card.name,
             instructions=instruction,
-            model=self.model_name,
+            model=self.litellm_model,  # Use LiteLLM model string for API calls
             mcp_servers=self.mcp_server,
             output_type=ResponseFormat,
             model_settings=ModelSettings(temperature=0.0),
@@ -62,7 +61,7 @@ class A2AOpenaiAgent(BaseAgent):
         return instruction, Agent(
             name=self.agent_card.name,
             instructions=instruction,
-            model=self.model_name,
+            model=self.litellm_model,  # Use LiteLLM model string for API calls
             mcp_servers=self.mcp_server,
             output_type=ResponseFormat,
             model_settings=ModelSettings(temperature=0.0),

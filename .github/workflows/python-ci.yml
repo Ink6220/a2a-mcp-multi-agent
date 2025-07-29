@@ -33,9 +33,30 @@ jobs:
         if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || (github.event_name == 'pull_request' && github.base_ref == 'main')
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_REGION_NAME: ${{ secrets.AWS_REGION_NAME }}
         run: |
-          if [ -z "$OPENAI_API_KEY" ]; then
-            echo "::error::OPENAI_API_KEY secret is missing.";
+          # Check if we have at least one provider available
+          if [ -z "$OPENAI_API_KEY" ] && { [ -z "$AWS_ACCESS_KEY_ID" ] || [ -z "$AWS_SECRET_ACCESS_KEY" ] || [ -z "$AWS_REGION_NAME" ]; }; then
+            echo "::error::Neither OpenAI nor AWS/Nova credentials are available. At least one is required.";
+            echo "::error::For OpenAI: OPENAI_API_KEY";
+            echo "::error::For AWS/Nova: AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_REGION_NAME";
             exit 1;
           fi
+          
+          # Show which providers are available
+          echo "Available providers:"
+          if [ -n "$OPENAI_API_KEY" ]; then
+            echo "✅ OpenAI (API key available)"
+          else
+            echo "❌ OpenAI (API key missing)"
+          fi
+          
+          if [ -n "$AWS_ACCESS_KEY_ID" ] && [ -n "$AWS_SECRET_ACCESS_KEY" ] && [ -n "$AWS_REGION_NAME" ]; then
+            echo "✅ AWS/Nova (credentials available)"
+          else
+            echo "❌ AWS/Nova (credentials missing)"
+          fi
+          
           pytest --run_requires_api

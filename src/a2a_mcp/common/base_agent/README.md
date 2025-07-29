@@ -105,3 +105,59 @@ This is the cornerstone of the framework. Developers must inherit from `BaseAgen
 6.  **Response Generation**: The agent constructs a `ResponseFormat` object.
 7.  **Usage Logging**: Before returning, `_create_and_store_usage` is called to log the details of the interaction.
 8.  **Inter-Agent Communication**: If `action` is "call_next_agent", the framework (or MCP) would use `agent_name` and `next_agent_instruction` to route the task. `make_remote_agent_connection` would be used if direct streaming to another agent is required.
+
+## Provider Integration System
+
+The A2A MCP framework now uses a unified provider integration system powered by LiteLLM, which allows seamless switching between different AI providers without changing the core agent logic.
+
+### Supported Providers
+
+The system supports the following providers through dedicated integration modules:
+
+1. **OpenAI** (`openai_integration.py`)
+   - Models: GPT-4, GPT-4-turbo, GPT-3.5-turbo, etc.
+   - Required env var: `OPENAI_API_KEY`
+
+2. **AWS Bedrock** (`aws_integration.py`)
+   - Models: Amazon Nova, Claude on Bedrock, etc.
+   - Required env vars: `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION_NAME`
+
+3. **Anthropic** (`anthropic_integration.py`)
+   - Models: Claude-3-Haiku, Claude-3-Sonnet, Claude-3-Opus
+   - Required env var: `ANTHROPIC_API_KEY`
+
+4. **Google** (`google_integration.py`)
+   - Models: Gemini-1.5-Flash, Gemini-1.5-Pro
+   - Required env var: `GOOGLE_API_KEY`
+
+### How It Works
+
+1. **Agent Card Configuration**: Specify the provider in your agent card:
+   ```json
+   {
+     "provider": {
+       "organization": "aws"
+     },
+     "modelName": "amazon.nova-lite-v1:0"
+   }
+   ```
+
+2. **Automatic Provider Selection**: The `A2AAgentSelector` automatically:
+   - Detects the provider from the agent card
+   - Validates the required environment variables
+   - Loads the appropriate integration module
+   - Converts the model name to LiteLLM format
+
+3. **Unified Agent**: All providers use the same `A2AOpenaiAgent` class, which now works with any LiteLLM-compatible model string.
+
+### Adding New Providers
+
+To add support for a new provider:
+
+1. Create a new integration module (e.g., `cohere_integration.py`)
+2. Implement the validation function and integration class
+3. Add the provider case to `A2AAgentSelector._get_model_integration()`
+
+### Migration from Legacy System
+
+The old system with separate `A2ANovaAgent` and `A2AOpenaiAgent` classes has been replaced with this unified approach. The `A2ANovaAgent` has been removed, and all functionality is now handled through the integration system.

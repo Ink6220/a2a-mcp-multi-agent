@@ -58,7 +58,7 @@ class AWSIntegration:
             # Default to nova-lite if unrecognized
             bedrock_model = "amazon.nova-lite-v1:0"
             
-        return f"bedrock/{bedrock_model}"
+        return f"litellm/bedrock/{bedrock_model}"
     
     def print_integration_info(self, model_name: str) -> None:
         """Print information about the AWS integration."""

@@ -46,7 +46,7 @@ class OpenAIIntegration:
             # Default to gpt-4o-mini if unrecognized
             openai_model = "gpt-4o-mini"
             
-        return f"openai/{openai_model}"
+        return f"litellm/openai/{openai_model}"
     
     def print_integration_info(self, model_name: str) -> None:
         """Print information about the OpenAI integration."""

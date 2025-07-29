@@ -46,7 +46,7 @@ class AnthropicIntegration:
             # Default to claude-3-haiku if unrecognized
             claude_model = "claude-3-haiku-20240307"
             
-        return f"anthropic/{claude_model}"
+        return f"litellm/anthropic/{claude_model}"
     
     def print_integration_info(self, model_name: str) -> None:
         """Print information about the Anthropic integration."""

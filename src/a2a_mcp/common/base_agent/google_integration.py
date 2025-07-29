@@ -46,7 +46,7 @@ class GoogleIntegration:
             # Default to gemini-1.5-flash if unrecognized
             gemini_model = "gemini-1.5-flash"
             
-        return f"gemini/{gemini_model}"
+        return f"litellm/gemini/{gemini_model}"
     
     def print_integration_info(self, model_name: str) -> None:
         """Print information about the Google integration."""

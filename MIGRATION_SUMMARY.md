@@ -6,6 +6,8 @@ This document summarizes the major refactoring of the A2A MCP framework to use a
 
 The framework has been migrated from having separate agent implementations for different providers (`A2ANovaAgent`, `A2AOpenaiAgent`) to a unified system where all providers are handled through LiteLLM integration modules.
 
+**UPDATE:** The framework has also been enhanced with sophisticated MCP tool server management capabilities, allowing for configuration-driven tool server loading and per-agent MCP server specification.
+
 ## Key Changes
 
 ### 1. New Integration Modules
@@ -161,3 +163,73 @@ result = await agent.invoke(query, context_id, task_id, context)
 ```
 
 This migration makes the framework more maintainable, extensible, and user-friendly while preserving all existing functionality. 
+
+## Recent Enhancements (MCP Server Management)
+
+### 1. Sophisticated MCP Tool Server Management
+
+Added a new `MCPToolServerManager` class that provides:
+
+- **Configuration-driven server loading** from `mcp_config.json`
+- **Per-agent MCP server specification** via `mcp_servers` field in agent cards
+- **Proper resource management** using AsyncExitStack
+- **Graceful error handling** for missing or failed servers
+
+### 2. Enhanced Agent Cards
+
+Agent cards now support an additional `mcp_servers` field:
+```json
+{
+  "name": "Airbnb Agent",
+  "provider": {
+    "organization": "openai"
+  },
+  "modelName": "gpt-4.1-mini",
+  "mcp_servers": ["airbnb"]
+}
+```
+
+This allows each agent to specify which MCP tool servers it needs.
+
+### 3. Cleaned MCP Server Implementation
+
+- **Removed hardcoded tools** from `src/a2a_mcp/mcp/server.py`
+- **Simplified server** to focus only on agent card discovery
+- **External tool servers** now managed through configuration
+
+### 4. Configuration-Based MCP Servers
+
+Added `src/a2a_mcp/common/base_mcp/mcp_config.json` with server definitions:
+```json
+{
+  "mcpServers": {
+    "airbnb": {
+      "command": "npx",
+      "args": ["-y", "@openbnb/mcp-server-airbnb", "--ignore-robots-txt"]
+    },
+    "wikipedia": {
+      "command": "wikipedia-mcp",
+      "args": ["--transport", "stdio", "--language", "en"]
+    }
+  }
+}
+```
+
+### 5. Enhanced Agent Launcher
+
+The agent launcher (`src/a2a_mcp/agents/__main__.py`) now:
+- Uses `AsyncExitStack` for proper resource management
+- Loads tool servers based on agent card specifications
+- Combines discovery server with tool servers
+- Provides better logging and error handling
+
+## Combined Benefits
+
+The system now provides:
+
+1. **Unified LiteLLM Agent System**: Single agent implementation for all providers
+2. **Sophisticated MCP Management**: Configuration-driven tool server loading
+3. **Per-Agent Tool Specification**: Each agent can specify its required tools
+4. **Clean Architecture**: Separation between agent discovery and tool provision
+5. **Proper Resource Management**: AsyncExitStack ensures clean shutdown
+6. **Backward Compatibility**: Existing agent cards continue to work 

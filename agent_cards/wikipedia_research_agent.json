@@ -1,7 +1,7 @@
 {
-    "name": "Presale Agent",
-    "description": "Initiate contact, qualify customer availability. Only call this agent to ask for availability only, otherwise call other agent. Input format: {{user_question}}",
-    "url": "http://localhost:10001/",
+    "name": "Wikipedia Research Agent",
+    "description": "Reasearch on tourism information on wikipedia",
+    "url": "http://localhost:10003/",
     "provider": {
         "organization": "openai",
         "url":"None"
@@ -29,15 +29,14 @@
     ],
     "skills": [
         {
-            "id": "greet_and_introduce",
-            "name": "Greet and introduce the promotion",
-            "description": "Helps Initiate contact to customer and qualify customer availability.",
+            "id": "Wikipedia Research Agent",
+            "name": "Wikipedia Research Agent",
+            "description": "I am planning a trip to London, I need to know the best places to visit for a relaxing weekend",
             "tags": [
-                "Greeting",
-                "Asking customer availability"
+                "Wikipedia"
             ],
             "examples": [
-                "สวัสดี"
+                "I am planning a trip to London, I need to know the best places to visit for a relaxing weekend"
             ],
             "inputModes": null,
             "outputModes": null
@@ -45,5 +44,6 @@
     ],
     "modelName":"gpt-4.1-mini",
     "systemPrompt": "",
-    "nextAgent": ["http://localhost:10002/"]
+    "nextAgent": [],
+    "mcp_servers": ["wikipedia"]
 }

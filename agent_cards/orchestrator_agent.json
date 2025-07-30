@@ -36,7 +36,7 @@
                 "execute plan"
             ],
             "examples": [
-                "Plan my trip to London, submit an expense report"
+                "Plan my trip to London, return me a finalized plan in md and work together with the agents to find the best places to visit for a relaxing weekend"
             ],
             "inputModes": null,
             "outputModes": null
@@ -44,5 +44,6 @@
     ],
     "modelName":"gpt-4.1-mini",
     "systemPrompt": "",
-    "nextAgent": ["http://localhost:10002/", "http://localhost:10001/"]
+    "nextAgent": ["http://localhost:10001/", "http://localhost:10002/","http://localhost:10003/"],
+    "mcp_servers": []
 }

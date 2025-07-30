@@ -5,6 +5,7 @@ import logging
 import sys
 
 from pathlib import Path
+from contextlib import AsyncExitStack
 
 import click
 import httpx
@@ -20,8 +21,9 @@ from a2a_mcp.common.memory_management import MemoryManagement
 from a2a_mcp.common.base_executor import BaseAgentExecutor
 from a2a_mcp.common.base_agent.a2a_agent_selector import A2AAgentSelector
 from a2a_mcp.common.base_mcp.filtered_mcp_server_sse import FilteredMCPServerSse
+from a2a_mcp.common.base_mcp.mcp_tool_server_manager import MCPToolServerManager
 from a2a_mcp.common.card_discovery import A2ACardDiscovery
-from a2a_mcp.common.prompts import PRESALE_PROMPT, PROMO_ADVISOR_PROMPT
+from a2a_mcp.common.prompts import ORCHESTRATOR_PROMPT, AIRBNB_PROMPT, WIKIPEDIA_PROMPT, GOOGLE_CALENDAR_PROMPT, PRESALE_PROMPT, PROMO_ADVISOR_PROMPT
 
 import os
 from dotenv import load_dotenv
@@ -32,16 +34,24 @@ logger = logging.getLogger(__name__)
 def run_uvicorn(server: A2AStarletteApplication, host="127.0.0.1", port=8000):
     uvicorn.run(server.build(), host=host, port=port)
 
-def get_agent(agent_card: CustomAgentCard, card_discovery: A2ACardDiscovery, mcp_server: FilteredMCPServerSse):
+def get_agent(agent_card: CustomAgentCard, card_discovery: A2ACardDiscovery, mcp_servers: list):
     """Get the agent, given an agent card."""
     try:
         # TODO: add systemprompt instruction into agent_card based on agent name, due to load agent card from .json -> cannot directly passing prompt and connot write multiple line of string into systemPrompt.
-        if agent_card.name == "Presale Agent":
+        if agent_card.name == "Orchestrator Agent":
+            agent_card.systemPrompt = ORCHESTRATOR_PROMPT
+        elif agent_card.name == "Airbnb Agent":
+            agent_card.systemPrompt = AIRBNB_PROMPT
+        elif agent_card.name == "Wikipedia Research Agent":
+            agent_card.systemPrompt = WIKIPEDIA_PROMPT
+        elif agent_card.name == "Google Calendar Agent":
+            agent_card.systemPrompt = GOOGLE_CALENDAR_PROMPT
+        elif agent_card.name == "Presale Agent":
             agent_card.systemPrompt = PRESALE_PROMPT
         elif agent_card.name == "PromoAdvisor Agent":
             agent_card.systemPrompt = PROMO_ADVISOR_PROMPT
 
-        return A2AAgentSelector(agent_card=agent_card, card_discovery=card_discovery, mcp_server=[mcp_server]).get_agent()
+        return A2AAgentSelector(agent_card=agent_card, card_discovery=card_discovery, mcp_server=mcp_servers).get_agent()
     except Exception as e:
         raise e
 
@@ -52,19 +62,36 @@ async def init_agent_server(host, port, agent_card, mcp_url, include_tools, excl
         data = json.load(file)
     agent_card = CustomAgentCard(**data)
 
-    # Connect to MCP server using proper async context manager
-    async with FilteredMCPServerSse(
-        name="SSE Python Server",
-        include_tools=include_tools,
-        exclude_tools=exclude_tools,
-        cache_tools_list=True,
-        params={
-            "url": mcp_url,
-        },
-    ) as mcp_server:
-        logger.info(f"MCP server initialized and connected to {mcp_url}")
+    # Use AsyncExitStack to manage multiple async contexts
+    async with AsyncExitStack() as stack:
+        # Initialize agent discovery server (existing functionality)
+        discovery_server = await stack.enter_async_context(FilteredMCPServerSse(
+            name="SSE Python Server",
+            include_tools=include_tools,
+            exclude_tools=exclude_tools,
+            cache_tools_list=True,
+            params={
+                "url": mcp_url,
+            },
+        ))
+        logger.info(f"Agent discovery MCP server initialized and connected to {mcp_url}")
+        
+        # Initialize tool servers from configuration (only servers specified in agent card)
+        requested_mcp_servers = getattr(agent_card, 'mcp_servers', [])
+        tool_server_manager = MCPToolServerManager(server_names=requested_mcp_servers)
+        tool_servers = await tool_server_manager.initialize_servers()
+        
+        # Ensure tool servers are cleaned up with the stack
+        if tool_server_manager.exit_stack:
+            await stack.enter_async_context(tool_server_manager.exit_stack)
+        
+        # Combine discovery and tool servers
+        all_mcp_servers = [discovery_server] + tool_servers
+        logger.info(f"Total MCP servers available: {len(all_mcp_servers)} (1 discovery + {len(tool_servers)} tools)")
+        
+        # Agent discovery (uses only the discovery server)
         a2a_card_discovery = A2ACardDiscovery(agent_card)
-        agent_cards, agent_info = await a2a_card_discovery.discovery_agent_card(mcp_server)        
+        agent_cards, agent_info = await a2a_card_discovery.discovery_agent_card(discovery_server)        
         print("Discover:")
         print(a2a_card_discovery.get_remote_agent_info())
 
@@ -72,7 +99,7 @@ async def init_agent_server(host, port, agent_card, mcp_url, include_tools, excl
 
         client = httpx.AsyncClient()
         request_handler = DefaultRequestHandler(
-            agent_executor=BaseAgentExecutor(agent=get_agent(agent_card, a2a_card_discovery, mcp_server), memory=memory),
+            agent_executor=BaseAgentExecutor(agent=get_agent(agent_card, a2a_card_discovery, all_mcp_servers), memory=memory),
             task_store=memory,
             push_notifier=InMemoryPushNotifier(client),
         )
@@ -110,7 +137,7 @@ async def init_agent_server(host, port, agent_card, mcp_url, include_tools, excl
 @click.option(
     "--include-tools",
     multiple=True,
-    default=("save_log_customer",),
+    default=(),
     help="List of tool names to include (allowlist)."
 )
 @click.option(

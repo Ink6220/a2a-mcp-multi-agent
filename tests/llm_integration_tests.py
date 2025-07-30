@@ -1,6 +1,8 @@
 import os
 import pytest
 import asyncio
+import warnings
+from pydantic import PydanticWarning
 
 # Import helpers from original manual test script
 from unit_tests.test_invoke_protocol_compliance.sample_test import (
@@ -12,6 +14,13 @@ from unit_tests.test_invoke_protocol_compliance.test_invoke_return_type.test_age
 )
 from unit_tests.test_invoke_protocol_compliance.test_llm_invoke_behaviour.test_llm_behavior import (
     LLMBehaviorTester,
+)
+
+# Filter Pydantic serialization warnings
+warnings.filterwarnings(
+    "ignore",
+    message=".*Expected 9 fields but got.*",
+    category=UserWarning
 )
 
 

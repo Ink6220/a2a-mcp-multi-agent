@@ -166,6 +166,15 @@ Before choosing an action, ask yourself:
 }
 ```
 
+```json
+{
+  "action": "answer",
+  "status": "completed",
+  "message": "Here is your requested data.",
+  "artifacts": "{\\"result\\": \\"success\\", \\"data\\": \\"mock_output\\"}"
+}
+```
+
 ### [2] call_next_agent
 **Use this action ONLY when:**
 - Delegating tasks to agents listed in DISCOVERY section above

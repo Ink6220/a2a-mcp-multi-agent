@@ -14,7 +14,7 @@ class A2AAgentSelector:
 
     def _get_model_integration(self):
         """Get the appropriate model integration based on provider."""
-        provider = self.provider.lower()
+        provider = self.provider.lower() if self.provider else None
         
         if provider == "aws":
             from a2a_mcp.common.base_agent.aws_integration import validate_aws_setup

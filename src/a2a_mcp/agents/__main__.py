@@ -23,7 +23,7 @@ from a2a_mcp.common.base_agent.a2a_agent_selector import A2AAgentSelector
 from a2a_mcp.common.base_mcp.filtered_mcp_server_sse import FilteredMCPServerSse
 from a2a_mcp.common.base_mcp.mcp_tool_server_manager import MCPToolServerManager
 from a2a_mcp.common.card_discovery import A2ACardDiscovery
-from a2a_mcp.common.prompts import ORCHESTRATOR_PROMPT, AIRBNB_PROMPT, WIKIPEDIA_PROMPT, GOOGLE_CALENDAR_PROMPT, PRESALE_PROMPT, PROMO_ADVISOR_PROMPT
+from a2a_mcp.common.prompts import ORCHESTRATOR_PROMPT, AIRBNB_PROMPT, WIKIPEDIA_PROMPT, GOOGLE_CALENDAR_PROMPT
 
 import os
 from dotenv import load_dotenv
@@ -46,10 +46,6 @@ def get_agent(agent_card: CustomAgentCard, card_discovery: A2ACardDiscovery, mcp
             agent_card.systemPrompt = WIKIPEDIA_PROMPT
         elif agent_card.name == "Google Calendar Agent":
             agent_card.systemPrompt = GOOGLE_CALENDAR_PROMPT
-        elif agent_card.name == "Presale Agent":
-            agent_card.systemPrompt = PRESALE_PROMPT
-        elif agent_card.name == "PromoAdvisor Agent":
-            agent_card.systemPrompt = PROMO_ADVISOR_PROMPT
 
         return A2AAgentSelector(agent_card=agent_card, card_discovery=card_discovery, mcp_server=mcp_servers).get_agent()
     except Exception as e:
@@ -166,5 +162,3 @@ def main(host, port, agent_card, mcp_url, include_tools, exclude_tools):
 
 if __name__ == '__main__':
     main()
-
-# uv run src/a2a_mcp/agents/ --port 10000 --agent-card agent_cards/presale_agent.json --mcp-url http://localhost:8000/sse --include-tools save_log_customer --include-tools check_car_brand --include-tools data_car_insurance_2 --include-tools data_other_insurance

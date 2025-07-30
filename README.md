@@ -46,8 +46,8 @@ uv run a2a-mcp --run mcp-server --transport sse
 # Start orchestrator agent
 uv run src/a2a_mcp/agents/ --agent-card agent_cards/orchestrator_agent.json --port 10101
 
-# Start presale agent (in another terminal)
-uv run src/a2a_mcp/agents/ --agent-card agent_cards/presale_agent.json --port 10001
+# Start sub agents (in another terminal), eg.
+uv run src/a2a_mcp/agents/ --agent-card agent_cards/airbnb_agent.json --port 10001
 ```
 
 ### Running the CLI
@@ -84,18 +84,21 @@ Here is an example choosing Openai agent (gpt-4.1-mini) as a Presale Agent role
 
 **Navigate to agent_cards/** 
 1. Create a new JSON file named using the following convention: `<agent_name>_agent.json`
-    - Create your `agent_cards/presale_agent.json`
+    - Create your `agent_cards/airbnb_agent.json`
     - The <agent_name> should be lowercase, use underscores (_) to separate words, and reflect the primary function or role of the agent.
 2. Update **organization='openai'** and **modelName="gpt-4.1-mini"**
-3. Update **name='Presale Agent'**, this agent name (descriptive name related to this agent capability and skill)
+    - for non openai agents, see src/a2a_mcp/common/base_agent/README.md, it defines the translation layer implemented by llmlite
+3. Update **name='airbnb_agent'**, this agent name (descriptive name related to this agent capability and skill)
 4. Update **url**, url and port to be deployed
 5. Update **systemPrompt=""**, which can be update later inside **agent_class/\_\_main\_\_.py**
 6. Update **description="your-agent-description"**, this will help other agent understand this agent role and when to call this agent
 7. Update **skills**, helps to briefly explain agent's tool as skill that this agent can do.
 8. Update **nextAgent**, define the list of agents this agent can communicate with using the nextAgent field. Provide the URLs of those agents:
+9. Update **mcp_servers**, defines the list of server names to expose to the agent
+    - the server name is defined in src/a2a_mcp/common/base_mcp/mcp_config.json, it can be a npm based server or a local one 
 ```json
 {
-    "name": "Presale Agent",
+    "name": "Sample Agent",
     "description": "Initiate contact, qualify customer availability. Only call this agent to ask for availability only, otherwise call other agent. Input format: {{user_question}}",
     "url": "http://localhost:10001/",
     "provider": {

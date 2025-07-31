@@ -32,8 +32,19 @@ This model standardizes the structure of responses returned by agents. It ensure
 **Validation:**
 *   Ensures `agent_name` and `next_agent_instruction` are provided if `action` is "call_next_agent".
 
+### 2. Unified Provider System (via LiteLLM)
+*   All agent implementations now use a single agent class (A2AOpenaiAgent) backed by a provider-agnostic architecture using LiteLLM. The provider is specified in the agent card and automatically handled at runtime.
 
-### 2. Usage Tracking Models (Pydantic)
+| Provider    | Integration Module         | Environment Variables Required                                  |
+| ----------- | -------------------------- | --------------------------------------------------------------- |
+| OpenAI      | `openai_integration.py`    | `OPENAI_API_KEY`                                                |
+| AWS Bedrock | `aws_integration.py`       | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION_NAME` |
+| Anthropic   | `anthropic_integration.py` | `ANTHROPIC_API_KEY`                                             |
+| Google      | `google_integration.py`    | `GOOGLE_API_KEY`                                                |
+
+
+
+### 3. Usage Tracking Models (Pydantic)
 
 These models are designed for detailed logging and tracking of agent activity, particularly API calls and token consumption.
 
@@ -54,7 +65,7 @@ These models are designed for detailed logging and tracking of agent activity, p
 
 The `current_time_utc7_str()` utility function provides timestamps for these records.
 
-### 3. `BaseAgent` (Abstract Base Class)
+### 4. `BaseAgent` (Abstract Base Class)
 
 This is the cornerstone of the framework. Developers must inherit from `BaseAgent` to create concrete agent implementations.
 
@@ -74,7 +85,7 @@ This is the cornerstone of the framework. Developers must inherit from `BaseAgen
 *   `follow_up_invoke(query, context_id, task_id, context)`: Handles a follow-up interaction, typically after a delegated task is completed, to decide the next step.
 *   `stream(query, context_id, task_id)`: Handles a streaming query, yielding responses incrementally.
 *   `convert_tool_format(tools)`: Converts a generic tool definition into the format expected by the specific LLM or agent backend.
-*   `parse_structure_output(text)`: Parses text output (potentially from an LLM) into a `ResponseFormat` object or returns the raw text if parsing fails.
+*   `_parse_to_response_format(self, data: Union[str, ResponseFormat]) -> ResponseFormat:`: Parses text output (potentially from an LLM) into a `ResponseFormat` object or returns the raw text if parsing fails.
 *   `root_instruction(chat_history, tools, agent_info)`: Generates the main system prompt or instruction for the LLM.
 *   `make_remote_agent_connection(target_agent_card, request)`: Establishes and manages a streaming connection to another agent.
 *   `_extract_tool_calls_and_outputs(result)`: Extracts `ToolCall` and `ToolOutput` objects from an agent's processing result.
@@ -101,7 +112,63 @@ This is the cornerstone of the framework. Developers must inherit from `BaseAgen
     *   Use `root_instruction` to generate the system prompt.
     *   Call the underlying LLM.
     *   Use `_extract_tool_calls_and_outputs` if the LLM requests tool use.
-    *   Use `parse_structure_output` to attempt to fit the LLM's text into the `ResponseFormat`.
+    *   Use `_parse_to_response_format` to attempt to fit the LLM's text into the `ResponseFormat`.
 6.  **Response Generation**: The agent constructs a `ResponseFormat` object.
 7.  **Usage Logging**: Before returning, `_create_and_store_usage` is called to log the details of the interaction.
 8.  **Inter-Agent Communication**: If `action` is "call_next_agent", the framework (or MCP) would use `agent_name` and `next_agent_instruction` to route the task. `make_remote_agent_connection` would be used if direct streaming to another agent is required.
+
+## Provider Integration System
+
+The A2A MCP framework now uses a unified provider integration system powered by LiteLLM, which allows seamless switching between different AI providers without changing the core agent logic.
+
+### Supported Providers
+
+The system supports the following providers through dedicated integration modules:
+
+1. **OpenAI** (`openai_integration.py`)
+   - Models: GPT-4, GPT-4-turbo, GPT-3.5-turbo, etc.
+   - Required env var: `OPENAI_API_KEY`
+
+2. **AWS Bedrock** (`aws_integration.py`)
+   - Models: Amazon Nova, Claude on Bedrock, etc.
+   - Required env vars: `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION_NAME`
+
+3. **Anthropic** (`anthropic_integration.py`)
+   - Models: Claude-3-Haiku, Claude-3-Sonnet, Claude-3-Opus
+   - Required env var: `ANTHROPIC_API_KEY`
+
+4. **Google** (`google_integration.py`)
+   - Models: Gemini-1.5-Flash, Gemini-1.5-Pro
+   - Required env var: `GOOGLE_API_KEY`
+
+### How It Works
+
+1. **Agent Card Configuration**: Specify the provider in your agent card:
+   ```json
+   {
+     "provider": {
+       "organization": "aws"
+     },
+     "modelName": "amazon.nova-lite-v1:0"
+   }
+   ```
+
+2. **Automatic Provider Selection**: The `A2AAgentSelector` automatically:
+   - Detects the provider from the agent card
+   - Validates the required environment variables
+   - Loads the appropriate integration module
+   - Converts the model name to LiteLLM format
+
+3. **Unified Agent**: All providers use the same `A2AOpenaiAgent` class, which now works with any LiteLLM-compatible model string.
+
+### Adding New Providers
+
+To add support for a new provider:
+
+1. Create a new integration module (e.g., `cohere_integration.py`)
+2. Implement the validation function and integration class
+3. Add the provider case to `A2AAgentSelector._get_model_integration()`
+
+### Migration from Legacy System
+
+The old system with separate `A2ANovaAgent` and `A2AOpenaiAgent` classes has been replaced with this unified approach. The `A2ANovaAgent` has been removed, and all functionality is now handled through the integration system.

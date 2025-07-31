@@ -5,7 +5,7 @@ from unit_tests.test_execute_starlette_compliance.unit_test_starlette import (
 )
 
 
-# NOTE: We avoid relying on pytest-asyncio by keeping the test synchronous
+# NOTE: Checks BaseAgentExecutor logical behaviour
 def test_executor_compliance_scenarios():
     """Runs the executor scenario suite that uses mock agents only (offline)."""
     all_passed = asyncio.run(test_a2a_executor_scenarios())
@@ -20,7 +20,7 @@ instantiates the real BaseAgentExecutor,
 feeds the mock agent's ResponseFormat back through the executor,
 captures the A2A event stream that the executor would send over SSE.
 """
-
+# Starlette integration test for BaseAgentExecutor
 def test_response_format_compliance():
     """Validate that a simple ExampleCompliantAgent returns a ResponseFormat that passes the A2A compliance checks without hitting any external API."""
     from unit_tests.test_invoke_protocol_compliance.test_invoke_return_type.test_agent_a2a_compliance import (

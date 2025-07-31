@@ -34,7 +34,8 @@ class ExampleCompliantAgent:
             action="answer",
             status="completed",
             message="I have processed your request...",
-            next_agent_instruction=None
+            next_agent_instructions=None,
+            agent_names=None
         )
 
 class A2AComplianceTester:
@@ -46,25 +47,25 @@ class A2AComplianceTester:
             "completed": {
                 "required_fields": ["message"],
                 "optional_fields": ["artifacts", "custom_status"],
-                "forbidden_fields": ["agent_name", "next_agent_instruction"]
+                "forbidden_fields": ["agent_names", "next_agent_instructions"]
             },
             "input_required": {
                 "required_fields": ["message"],
-                "forbidden_fields": ["agent_name", "next_agent_instruction", "artifacts"]
+                "forbidden_fields": ["agent_names", "next_agent_instructions", "artifacts"]
             },
             "failed": {
                 "required_fields": ["message"],
                 "optional_fields": ["custom_status"],
-                "forbidden_fields": ["agent_name", "next_agent_instruction"]
+                "forbidden_fields": ["agent_names", "next_agent_instructions"]
             }
         },
         "call_next_agent": {
-            "completed": {
-                "required_fields": ["message", "agent_name", "next_agent_instruction"],
+            "input_required": {
+                "required_fields": ["message", "agent_names", "next_agent_instructions"],
                 "optional_fields": ["custom_status"],
                 "field_requirements": {
-                    "agent_name": lambda x: bool(x and len(x) > 0),
-                    "next_agent_instruction": lambda x: bool(x and len(x) > 0)
+                    "agent_names": lambda x: bool(x and len(x) > 0 and isinstance(x, list)),
+                    "next_agent_instructions": lambda x, response=None: bool(x and len(x) > 0 and isinstance(x, list) and (response is None or len(x) == len(response.agent_names)))
                 }
             }
         }

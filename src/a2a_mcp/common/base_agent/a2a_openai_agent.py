@@ -7,7 +7,7 @@ import json
 import re
 import xml.etree.ElementTree as ET
 import os
-from typing import Any, Dict, Literal, Union, AsyncGenerator
+from typing import Any, Dict, Literal, Union, AsyncGenerator, Optional
 from collections.abc import AsyncIterable
 from dotenv import load_dotenv
 load_dotenv()
@@ -32,43 +32,144 @@ from colorama import Fore, Style, init
 from pydantic import ValidationError
 import httpx
 from uuid import uuid4
+import litellm
 class A2AOpenaiAgent(BaseAgent):
-    def __init__(self, agent_card: CustomAgentCard, card_discovery: A2ACardDiscovery, mcp_server: list=[]):
-        super().__init__(agent_card.modelName, agent_card, card_discovery)  # Call BaseAgent's __init__
+    def __init__(self, agent_card: CustomAgentCard, card_discovery: A2ACardDiscovery, mcp_server: list=[], litellm_model: Optional[str] = None):
+        super().__init__(agent_card.modelName, agent_card, card_discovery, litellm_model)  # Call BaseAgent's __init__
 
         self.mcp_server = mcp_server
-        self.agent = None
         self.context_stores = {}
 
-        # TODO: Still need memory manager here?
+        # Initialize the base agent once
+        instruction = self.root_instruction(chat_history="", agent_info="")
+        
+        # Check if model supports response_format (eg. aws nova-lite does not)
+        supports_response_format = self._check_response_format_support()
+        
+        # Configure agent based on response_format support
+        if supports_response_format:
+            self.agent = Agent(
+                name=self.agent_card.name,
+                instructions=instruction,
+                model=self.litellm_model,
+                mcp_servers=self.mcp_server,
+                output_type=ResponseFormat,
+                model_settings=ModelSettings(temperature=0.0),
+            )
+        else:
+            print(f"{Fore.YELLOW}Model {self.model_name} does not support response_format, initializing without structured output{Style.RESET_ALL}")
+            self.agent = Agent(
+                name=self.agent_card.name,
+                instructions=instruction,
+                model=self.litellm_model,
+                mcp_servers=self.mcp_server,
+                model_settings=ModelSettings(temperature=0.0),
+            )
+        
+        # Ensure agent is initialized
+        if not self.agent:
+            raise RuntimeError("Failed to initialize OpenAI agent")
+
         print("=============== Using Openai ===============")
 
-    def get_agent(self, history, agent_info):
-        instruction = self.root_instruction(chat_history=history, agent_info=agent_info)
-        # print(instruction)
-        return instruction, Agent(
-            name=self.agent_card.name,
-            instructions=instruction,
-            model=self.model_name,
-            mcp_servers=self.mcp_server,
-            output_type=ResponseFormat,
-            model_settings=ModelSettings(temperature=0.0),
+    def _check_response_format_support(self) -> bool:
+        """Check if the current model supports structured response_format using json_schema."""
+        try:
+            from litellm.utils import supports_response_schema
+            return supports_response_schema(model=self.litellm_model, custom_llm_provider="bedrock") #hardcoded to bedrock for now
+        except Exception as e:
+            logger.warning(f"Could not determine json_schema support for model {self.litellm_model}: {e}")
+            return False  # safer default
+
+    def _parse_to_response_format(self, data: Union[str, ResponseFormat]) -> ResponseFormat:
+        if isinstance(data, ResponseFormat):
+            return data
+
+        # Helper function to try parsing JSON
+        def try_parse_json(text: str) -> Optional[Dict]:
+            try:
+                return json.loads(text)
+            except Exception:
+                return None
+
+        # If input is string, try various parsing strategies
+        if isinstance(data, str):
+            # Strategy 1: Direct JSON parse
+            parsed = try_parse_json(data)
+            if parsed:
+                try:
+                    return ResponseFormat(**parsed)
+                except Exception:
+                    pass
+
+            # Strategy 2: Strip markdown code blocks
+            if "```" in data:
+                # Extract content between ```json and ``` or just between ``` and ```
+                import re
+                code_block_pattern = r"```(?:json)?\s*([\s\S]*?)\s*```"
+                matches = re.findall(code_block_pattern, data)
+                
+                for match in matches:
+                    parsed = try_parse_json(match.strip())
+                    if parsed:
+                        try:
+                            return ResponseFormat(**parsed)
+                        except Exception:
+                            continue
+
+            # Strategy 3: Find JSON-like structure in text
+            # Look for patterns like {..."action": "answer"...} or {..."action":"answer"...}
+            import re
+            json_pattern = r"\{[^{]*\"action\"[\s]*:[\s]*\"(?:answer|call_next_agent)\"[^}]*\}"
+            matches = re.findall(json_pattern, data)
             
+            for match in matches:
+                parsed = try_parse_json(match)
+                if parsed:
+                    try:
+                        return ResponseFormat(**parsed)
+                    except Exception:
+                        continue
+
+            # Strategy 4: Handle escaped JSON in artifacts
+            # Sometimes the JSON might be double-escaped due to being in artifacts
+            escaped_data = data.replace('\\"', '"').replace('\\\\', '\\')
+            if escaped_data != data:
+                parsed = try_parse_json(escaped_data)
+                if parsed:
+                    try:
+                        return ResponseFormat(**parsed)
+                    except Exception:
+                        pass
+
+        # Fallback: Return default response format with original text as message
+        logger.warning(f"All parsing strategies failed, falling back to default ResponseFormat")
+        return ResponseFormat(
+            action="answer",
+            status="completed",  # Hacky fix; might cause failures
+            message=str(data),
+            agent_names=None,
+            next_agent_instructions=None,
+            artifacts=None
         )
-    
-    def get_follow_up_agent(self, history: str, agent_info: str):
-        instruction = self.root_follow_up_instruction(chat_history=history, agent_info=agent_info)
-        print(f"{Fore.BLUE}{instruction}{Style.RESET_ALL}")
-        return instruction, Agent(
-            name=self.agent_card.name,
-            instructions=instruction,
-            model=self.model_name,
-            mcp_servers=self.mcp_server,
-            output_type=ResponseFormat,
-            model_settings=ModelSettings(temperature=0.0),
+
+        
+
+    def update_agent_instructions(self, history: str, agent_info: str, is_follow_up: bool = False) -> str:
+        """Update agent instructions while keeping the same agent instance"""
+        if not self.agent:
+            raise RuntimeError("Agent not initialized")
             
+        instruction = (
+            self.root_follow_up_instruction(chat_history=history, agent_info=agent_info)
+            if is_follow_up
+            else self.root_instruction(chat_history=history, agent_info=agent_info)
         )
-    
+        if is_follow_up:
+            print(f"{Fore.BLUE}{instruction}{Style.RESET_ALL}")
+        self.agent.instructions = instruction
+        return instruction
+
     async def make_remote_agent_connection(
         self,
         target_agent_card: AgentCard, 
@@ -77,7 +178,7 @@ class A2AOpenaiAgent(BaseAgent):
         """Form a connection and stream messages to a remote agent, yielding events as they arrive."""
         
         async def _stream_connection():
-            async with httpx.AsyncClient(timeout=30) as httpx_client:
+            async with httpx.AsyncClient(timeout=60) as httpx_client:
                 agent_client = A2AClient(httpx_client, target_agent_card)
                 
                 # Check if agent supports streaming
@@ -125,7 +226,9 @@ class A2AOpenaiAgent(BaseAgent):
         return _stream_connection()
 
     async def invoke(self, query: str, context_id: str, task_id: str, context: Dict[str, Task]) -> ResponseFormat:
-        # TODO: maybe we should go through together on invoke(), if we are going to change response format etc (im not too clear on this)
+        if not self.agent:
+            raise RuntimeError("Agent not initialized")
+            
         usage_id = str(uuid4())
         result = None
         try:
@@ -133,8 +236,8 @@ class A2AOpenaiAgent(BaseAgent):
             
             #Generate agent result
             agent_info = self.card_discovery.get_remote_agent_info()
-            instruction, self.agent = self.get_agent(history, agent_info)
-            print(Fore.GREEN + Style.BRIGHT + "Init agent complete" + Style.RESET_ALL)
+            instruction = self.update_agent_instructions(history, agent_info, is_follow_up=False)
+            print(Fore.GREEN + Style.BRIGHT + "Updated agent instructions" + Style.RESET_ALL)
             print(Fore.BLUE + Style.BRIGHT + instruction + Style.RESET_ALL)
             start_time = time.time()
             result = await Runner.run(self.agent, query)
@@ -167,7 +270,7 @@ class A2AOpenaiAgent(BaseAgent):
                     context_id=context_id,
                     task_id=task_id,
                     query=query,
-                    result=result.final_output,
+                    result=self._parse_to_response_format(result.final_output),
                     api_usage=ApiUsage(
                         prompt_tokens=api_usage.input_tokens,
                         completion_tokens=api_usage.output_tokens,
@@ -181,16 +284,21 @@ class A2AOpenaiAgent(BaseAgent):
                 )
             # Convert result to ResponseFormat
             try:
-                return result.final_output
+                # If model supports structured output, ResponseFormat is already enforced
+                if self._check_response_format_support():
+                    return result.final_output
+                else:
+                    # For models without structured output support, parse the text response
+                    return self._parse_to_response_format(result.final_output)
+
             except ValidationError as ve:
                 print("Validation error while formatting response:", ve)
                 return ResponseFormat(
                     action="answer",
-                    status="failed",
-                    custom_status="",
+                    status="failed", 
                     message="The response format was invalid.",
-                    agent_name=None,
-                    next_agent_instruction=None,
+                    agent_names=None,
+                    next_agent_instructions=None,
                     artifacts=None
                 )
 
@@ -200,14 +308,16 @@ class A2AOpenaiAgent(BaseAgent):
             return ResponseFormat(
                 action="answer",
                 status="input_required",
-                custom_status="",
                 message="We are unable to process your request at the moment. Please try again.",
-                agent_name=None,
-                next_agent_instruction=None,
+                agent_names=None,
+                next_agent_instructions=None,
                 artifacts=None
             )
 
     async def follow_up_invoke(self, query: str, context_id: str, task_id: str, context: Dict[str, Task]) -> ResponseFormat:
+        if not self.agent:
+            raise RuntimeError("Agent not initialized")
+            
         usage_id = str(uuid4())
         result = None
         try:
@@ -215,10 +325,10 @@ class A2AOpenaiAgent(BaseAgent):
             
             #Generate agent result
             agent_info = self.card_discovery.get_remote_agent_info()
-            instruction, self.agent = self.get_follow_up_agent(history, agent_info)
-            print(Fore.GREEN + Style.BRIGHT + "Init agent complete" + Style.RESET_ALL)
+            instruction = self.update_agent_instructions(history, agent_info, is_follow_up=True)
+            print(Fore.GREEN + Style.BRIGHT + "Updated agent instructions" + Style.RESET_ALL)
             start_time = time.time()
-            result = await Runner.run(self.agent, query)
+            result = await Runner.run(self.agent, query, max_turns=20)
             print(Fore.GREEN + Style.BRIGHT + "[Runner.run]:" + Style.RESET_ALL, time.time() - start_time)
             print(result.raw_responses[0].usage)
             print(result.final_output)
@@ -249,23 +359,35 @@ class A2AOpenaiAgent(BaseAgent):
                     context_id=context_id,
                     task_id=task_id,
                     query=query,
-                    result=result,
-                    api_usage=api_usage,
+                    result=self._parse_to_response_format(result.final_output),
+                    api_usage=ApiUsage(
+                        prompt_tokens=api_usage.input_tokens,
+                        completion_tokens=api_usage.output_tokens,
+                        extra_usage=ExtraUsage(
+                            reasoning_tokens=api_usage.input_tokens_details.cached_tokens, 
+                            cache_tokens=api_usage.output_tokens_details.reasoning_tokens
+                        ),
+                    ),
                     tool_calls=tool_calls,
                     tool_outputs=tool_outputs            
                 )
             # Convert result to ResponseFormat
             try:
-                return result.final_output
+                # If model supports structured output, ResponseFormat is already enforced
+                if self._check_response_format_support():
+                    return result.final_output
+                else:
+                    # For models without structured output support, parse the text response
+                    return self._parse_to_response_format(result.final_output)
+
             except ValidationError as ve:
                 print("Validation error while formatting response:", ve)
                 return ResponseFormat(
                     action="answer",
-                    status="failed",
-                    custom_status="",
+                    status="failed", 
                     message="The response format was invalid.",
-                    agent_name=None,
-                    next_agent_instruction=None,
+                    agent_names=None,
+                    next_agent_instructions=None,
                     artifacts=None
                 )
 
@@ -275,146 +397,13 @@ class A2AOpenaiAgent(BaseAgent):
             return ResponseFormat(
                 action="answer",
                 status="input_required",
-                custom_status="",
                 message="We are unable to process your request at the moment. Please try again.",
-                agent_name=None,
-                next_agent_instruction=None,
+                agent_names=None,
+                next_agent_instructions=None,
                 artifacts=None
             )
 
-    async def stream(self, query: str, context_id: str, task_id: str) -> AsyncGenerator[Dict[str, Any], None]:
 
-        history = "" # TODO: Load Memory
-        agent_info = self.card_discovery.get_remote_agent_info()
-        self.agent = self.get_agent(history, agent_info)
-
-        result = Runner.run_streamed(self.agent, input=query)
-        raw_json_chunks = ""
-        message_content = ""
-        
-        async for event in result.stream_events():
-            if event.type == "raw_response_event" and isinstance(event.data, ResponseTextDeltaEvent):
-                chunk = event.data.delta
-                raw_json_chunks += chunk
-                
-                # Found first json object --is-> Generate complete
-                # Sometimes there is a chance that it generate duplicate answer {"status": ..., "message": ...}{"status": ..., "message": ...}
-                first_json = self.parse_structure_output(raw_json_chunks)
-                if isinstance(first_json, str) and first_json != "":
-                    print(f"\nExtracted {raw_json_chunks} -> {first_json}\n")
-                    raw_json_chunks = first_json
-                    break
-
-                # Try to extract structured content as we go
-                try:
-                    # As we receive chunks, try to parse what we've received so far
-
-                    # If we found that agent decide to forward task to another agent, we will wait for complete response.
-                    if 'call_next_agent' in raw_json_chunks:
-                        continue
-
-                    # This is a simple approach - we're looking for "message":"content" patterns
-                    if '"message":"' in raw_json_chunks or '"message":' in raw_json_chunks:
-                        # If we find a new piece of the message field
-                        new_content = self._extract_message_content(chunk)
-                        if new_content:
-                            message_content += new_content
-                            yield {
-                                "is_task_complete": False,
-                                "require_user_input": False,
-                                "content": new_content,
-                                "hang_up": False,
-                                "call_next_agent": False,
-                                "agent_name": ""
-                            }
-                except:
-                    # If parsing fails, continue collecting chunks
-                    pass
-            elif event.type == "agent_updated_stream_event":
-                print(f"Agent updated: {event.new_agent.name}")
-                continue
-            # When items are generated, print them
-            elif event.type == "run_item_stream_event":
-                if event.item.type == "tool_call_item":
-                    print("-- Tool was called")
-                    response_function_tool_call = event.item.raw_item
-                    # Safely access attributes that might not exist on all tool call types (returns none if attribute doesnt exist )
-                    arguments = getattr(response_function_tool_call, 'arguments', None)
-                    call_id = getattr(response_function_tool_call, 'call_id', None)
-                    tool_name = getattr(response_function_tool_call, 'name', None)
-                    tool_status = getattr(response_function_tool_call, 'status', None)
-
-                    print(arguments, call_id, tool_name, tool_status)
-                elif event.item.type == "tool_call_output_item":
-                    print(f"-- Tool output: {event.item.output}")
-                    raw_item = event.item.raw_item
-                    call_id = raw_item.get('call_id') if isinstance(raw_item, dict) else None # improves type safety
-                    if isinstance(raw_item, dict) and 'output' in raw_item:
-                        try:
-                            output_value = raw_item['output']
-                            # Ensure we have a string for json.loads
-                            if isinstance(output_value, str):
-                                output = json.loads(output_value)['text']
-                            else:
-                                output = str(output_value)
-                        except (json.JSONDecodeError, KeyError):
-                            output = str(raw_item['output'])
-
-                elif event.item.type == "message_output_item":
-                    print(f"-- Message output:\n {ItemHelpers.text_message_output(event.item)}")
-                else:
-                    pass  # Ignore other event types
-        
-        # At the end, parse the complete response to get the final status
-        try:
-            # First try to get a valid JSON string from parse_structure_output
-            structured_output = self.parse_structure_output(raw_json_chunks)
-            if isinstance(structured_output, str) and structured_output: #type safety check
-                parsed_response = json.loads(structured_output)
-            else:
-                # Fallback to parsing raw_json_chunks directly
-                parsed_response = json.loads(raw_json_chunks)
-                
-            print("parsed_response => ", parsed_response)
-            action = parsed_response.get("action", "answer")
-            status = parsed_response.get("status", "input_required")
-            agent_name = parsed_response.get("agent_name", "")
-            
-            # TODO: Shold we save conversation history here ? 
-
-            # Determine if we need user input or should hang up based on status
-            require_input = status == "input_required"
-            hang_up = status == "hang_up"
-
-            if action == "call_next_agent":
-                yield {
-                    "is_task_complete": True,
-                    "require_user_input": False,
-                    "content": parsed_response['message'],
-                    "hang_up": False,
-                    "call_next_agent": True,
-                    "agent_name": agent_name
-                }
-            else:                yield {
-                    "is_task_complete": True,
-                    "require_user_input": require_input,
-                    "content": parsed_response['message'],
-                    "hang_up": hang_up,
-                    "call_next_agent": False,
-                    "agent_name": ""
-                }
-        except json.JSONDecodeError:
-            print("json.JSONDecodeError: ", raw_json_chunks)
-            print("\n", message_content)
-            # If we can't parse the final JSON, return what we have
-            yield {
-                "is_task_complete": True,
-                "require_user_input": False,
-                "content": message_content,
-                "hang_up": False,
-                "call_next_agent": False,
-                "agent_name": ""
-            }
     
     def _extract_message_content(self, chunk):
         """Helper method to extract relevant message content from a chunk"""
@@ -429,37 +418,35 @@ class A2AOpenaiAgent(BaseAgent):
         # Remove escaping of quotes that might be in the actual message content
         return chunk.replace('\\"', '"').replace('"', "")
 
-    def parse_structure_output(self, text: str) -> Union[ResponseFormat, str]: # im not too sure about what is going on here to be honest, this should allow both return types
-        """
-        Input:
-            '{"model":"Mazda CX-5","brand":"Mazda"}{"model":"Mazda CX-5","brand":"Mazda"}' -> '{"model":"Mazda CX-5","brand":"Mazda"}'
-            '{"model":"Mazda CX-5","brand":' -> ""
-            '{"model":"Mazda CX-5","brand":"Mazda"}MMM' -> '{"model":"Mazda CX-5","brand":"Mazda"}'
-        """
-        open_brace_count = 0
-        start_index = -1
-
-        for i, char in enumerate(text):
-            if char == '{':
-                if open_brace_count == 0:
-                    start_index = i
-                open_brace_count += 1
-            elif char == '}':
-                open_brace_count -= 1
-                if open_brace_count == 0 and start_index != -1:
-                    return text[start_index:i+1]
-        return ""
 
     def convert_tool_format(self, tools) -> Any:
         pass
     
     def root_instruction(self, chat_history: str, tools: Any = None, agent_info: Any = None) -> str:
         prompt = self.agent_card.systemPrompt or "You are a helpful assistant."
-        return A2A_OPENAI_BASE_PROMPT.format(agent_name=self.agent_card.name, system_prompt=prompt, chat_history=chat_history, agent_info=agent_info)
+        # Escape curly braces in dynamic content to prevent format errors
+        safe_chat_history = chat_history.replace('{', '{{').replace('}', '}}') if chat_history else ""
+        safe_agent_info = agent_info.replace('{', '{{').replace('}', '}}') if agent_info else ""
+        
+        return A2A_OPENAI_BASE_PROMPT.format(
+            agent_name=self.agent_card.name, 
+            system_prompt=prompt, 
+            chat_history=safe_chat_history, 
+            agent_info=safe_agent_info
+        )
 
     def root_follow_up_instruction(self, chat_history: str, tools: Any = None, agent_info: Any = None) -> str:
         prompt = self.agent_card.systemPrompt or "You are a helpful assistant."
-        return A2A_OPENAI_FOLLOW_UP_BASE_PROMPT.format(agent_name=self.agent_card.name, system_prompt=prompt, chat_history=chat_history, agent_info=agent_info)
+        # Escape curly braces in dynamic content to prevent format errors
+        safe_chat_history = chat_history.replace('{', '{{').replace('}', '}}') if chat_history else ""
+        safe_agent_info = agent_info.replace('{', '{{').replace('}', '}}') if agent_info else ""
+        
+        return A2A_OPENAI_FOLLOW_UP_BASE_PROMPT.format(
+            agent_name=self.agent_card.name, 
+            system_prompt=prompt, 
+            chat_history=safe_chat_history, 
+            agent_info=safe_agent_info
+        )
 
     def _extract_tool_calls_and_outputs(self, result) -> tuple[list[ToolCall], list[ToolOutput]]:
         tool_calls = []

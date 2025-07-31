@@ -42,14 +42,14 @@ class ResponseFormat(BaseModel):
         description="Optional custom state such as 'hang_up', 'timeout', etc. for extended flow semantics."
     )
 
-    agent_name: Optional[str] = Field(
+    agent_names: Optional[List[str]] = Field(
         default=None,
-        description="Name of the agent to call, required if action is 'call_next_agent'."
+        description="List of agent names to call, required if action is 'call_next_agent'. Each agent will be called in parallel."
     )
 
-    next_agent_instruction: Optional[str] = Field(
-        None,
-        description="Message content, passed to the next agent as Clear description of the task to be executed"
+    next_agent_instructions: Optional[List[str]] = Field(
+        default=None,
+        description="List of instructions for each agent. Must match length of agent_names."
     )
     
     artifacts: Optional[str] = Field(
@@ -60,10 +60,14 @@ class ResponseFormat(BaseModel):
     @model_validator(mode="after")
     def validate_required_fields(self) -> Self:
         if self.action == "call_next_agent":
-            if not self.agent_name:
-                raise ValueError("`agent_name` is required when action is 'call_next_agent'")
-            if not self.next_agent_instruction:
-                raise ValueError("`next_agent_instruction` is required when action is 'call_next_agent'")
+            if not self.agent_names:
+                raise ValueError("`agent_names` is required when action is 'call_next_agent'")
+            if not self.next_agent_instructions:
+                raise ValueError("`next_agent_instructions` is required when action is 'call_next_agent'")
+            if len(self.agent_names) != len(self.next_agent_instructions):
+                raise ValueError("Length of `agent_names` must match length of `next_agent_instructions`")
+            if len(self.agent_names) == 0:
+                raise ValueError("`agent_names` cannot be empty when action is 'call_next_agent'")
         return self
 
 class ExtraUsage(BaseModel):
@@ -90,8 +94,9 @@ class Usage(BaseModel):
     timestamp: str = Field(default_factory=current_time_utc7_str)
 
 class BaseAgent(ABC):
-    def __init__(self, model_name: str, agent_card: CustomAgentCard, card_discovery: A2ACardDiscovery):
-        self.model_name = model_name
+    def __init__(self, model_name: str, agent_card: CustomAgentCard, card_discovery: A2ACardDiscovery, litellm_model: Optional[str] = None):
+        self.model_name = model_name  # Original model name from agent card
+        self.litellm_model = litellm_model or model_name  # LiteLLM-formatted model string
         self.agent_card: CustomAgentCard = agent_card
         self._usage_logs: Dict[str, Usage] = {}
 
@@ -123,10 +128,10 @@ class BaseAgent(ABC):
         """Follow up Invoke the agent after delegated task have been done, to decide to `call_next_agent` or `answer` based on intermediate message between agents."""
         pass
 
-    @abstractmethod
-    async def stream(self, query: str, context_id: str, task_id: str) -> AsyncGenerator[Dict[str, Any], None]:
-        """Stream responses from the agent. Must yield dictionaries with standardized format."""
-        pass
+    # @abstractmethod
+    # async def stream(self, query: str, context_id: str, task_id: str) -> AsyncGenerator[Dict[str, Any], None]:
+    #     """Stream responses from the agent. Must yield dictionaries with standardized format."""
+    #     pass
 
     @abstractmethod
     def convert_tool_format(self, tools) -> Any:
@@ -135,7 +140,7 @@ class BaseAgent(ABC):
 
 
     @abstractmethod
-    def parse_structure_output(self, text: str) -> Union[ResponseFormat, str]:
+    def _parse_to_response_format(self, data: Union[str, ResponseFormat]) -> ResponseFormat:
         """Parse structured output from text."""
         pass
 
@@ -270,8 +275,8 @@ class BaseAgent(ABC):
             model_name=self.model_name,
             user_input=query,
             output=result,
-            prompt_tokens=api_usage.prompt_tokens,
-            completion_tokens=api_usage.completion_tokens,
+            prompt_tokens=api_usage.prompt_tokens or 0,
+            completion_tokens=api_usage.completion_tokens or 0,
             extra_usage=api_usage.extra_usage,
             tool_calls=tool_calls if tool_calls else None,
             tool_outputs=tool_outputs if tool_outputs else None
@@ -285,6 +290,8 @@ class BaseAgent(ABC):
         print(f"Context ID: {usage.context_id}")
         print(f"Task ID: {usage.task_id}")
         print(f"Model: {usage.model_name}")
+        if hasattr(self, 'litellm_model') and self.litellm_model != self.model_name:
+            print(f"LiteLLM Model: {self.litellm_model}")
         print(f"Prompt Tokens: {usage.prompt_tokens}")
         print(f"Completion Tokens: {usage.completion_tokens}")
         if usage.extra_usage:
@@ -297,3 +304,5 @@ class BaseAgent(ABC):
         if usage.tool_outputs:
             print(f"Tool Outputs: {len(usage.tool_outputs)}")
         print(f"{Fore.MAGENTA}==================={Style.RESET_ALL}\n")
+        
+        return usage

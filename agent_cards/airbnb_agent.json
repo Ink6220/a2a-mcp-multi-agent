@@ -1,0 +1,51 @@
+{
+    "name": "Airbnb Agent",
+    "description": "Given locations, find the best Airbnb listing based off price and location",
+    "url": "http://localhost:10001/",
+    "provider": {
+        "organization": "aws",
+        "url": "None"
+    },
+    "version": "1.0.0",
+    "documentationUrl": null,
+    "capabilities": {
+        "streaming": "True",
+        "pushNotifications": "True",
+        "stateTransitionHistory": "False"
+    },
+    "authentication": {
+        "credentials": null,
+        "schemes": [
+            "public"
+        ]
+    },
+    "defaultInputModes": [
+        "text",
+        "text/plain"
+    ],
+    "defaultOutputModes": [
+        "text",
+        "text/plain"
+    ],
+    "skills": [
+        {
+            "id": "Airbnb Agent",
+            "name": "Airbnb Agent",
+            "description": "Given locations, find the best Airbnb listing based off price and location",
+            "tags": [
+                "Airbnb"
+            ],
+            "examples": [
+                "Plan my trip to London, submit an expense report"
+            ],
+            "inputModes": null,
+            "outputModes": null
+        }
+    ],
+    "modelName": "amazon.nova-lite-v1:0",
+    "systemPrompt": "",
+    "nextAgent": [],
+    "mcp_servers": [
+        "airbnb"
+    ]
+}

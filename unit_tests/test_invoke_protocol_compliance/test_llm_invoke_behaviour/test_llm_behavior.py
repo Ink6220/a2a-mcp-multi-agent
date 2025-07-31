@@ -40,7 +40,7 @@ class LLMBehaviorTester:
         },
         {
             "name": "Single Delegation State",
-            "query": "I need a JSON return, this can be done by the test-agent-2",
+            "query": "Ask test-agent-2 to do help query the database based off his system prompt",
             "expected_state": {
                 "action": "call_next_agent",
                 "status": "input_required",

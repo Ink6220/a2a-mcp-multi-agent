@@ -2,7 +2,6 @@ import os
 import pytest
 import asyncio
 import warnings
-from pydantic import PydanticWarning
 
 # Import helpers from original manual test script
 from unit_tests.test_invoke_protocol_compliance.sample_test import (
@@ -60,47 +59,48 @@ async def test_aws_nova_agent_compliance_and_behavior():
     assert behavior_results["status"] == "PASSED", f"AWS Nova agent failed: {behavior_results.get('failed_tests')}"
 
 
-@pytest.mark.requires_api_key
-@pytest.mark.asyncio
-async def test_both_agents_integration():
-    """Integration test that runs both OpenAI and AWS Nova agents if available."""
-    has_openai = bool(os.getenv("OPENAI_API_KEY"))
-    has_aws_nova = all([
-        os.getenv("AWS_ACCESS_KEY_ID"),
-        os.getenv("AWS_SECRET_ACCESS_KEY"),
-        os.getenv("AWS_REGION_NAME")
-    ])
+# same as indiv tests above
+# @pytest.mark.requires_api_key
+# @pytest.mark.asyncio
+# async def test_both_agents_integration():
+#     """Integration test that runs both OpenAI and AWS Nova agents if available."""
+#     has_openai = bool(os.getenv("OPENAI_API_KEY"))
+#     has_aws_nova = all([
+#         os.getenv("AWS_ACCESS_KEY_ID"),
+#         os.getenv("AWS_SECRET_ACCESS_KEY"),
+#         os.getenv("AWS_REGION_NAME")
+#     ])
 
-    # At least one provider must be available
-    assert has_openai or has_aws_nova, (
-        "Neither OpenAI nor AWS/Nova credentials are set. "
-        "This test requires at least one of:\n"
-        "1. OPENAI_API_KEY for OpenAI\n"
-        "2. AWS credentials (AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_REGION_NAME) for Nova"
-    )
+#     # At least one provider must be available
+#     assert has_openai or has_aws_nova, (
+#         "Neither OpenAI nor AWS/Nova credentials are set. "
+#         "This test requires at least one of:\n"
+#         "1. OPENAI_API_KEY for OpenAI\n"
+#         "2. AWS credentials (AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_REGION_NAME) for Nova"
+#     )
 
-    results = {}
+#     results = {}
     
-    # Test OpenAI if available
-    if has_openai:
-        print("Testing OpenAI agent...")
-        openai_agent = create_test_agent(prefer_provider="openai")
-        openai_results = await LLMBehaviorTester.test_llm_behavior(openai_agent)
-        results["OpenAI"] = openai_results
+#     # Test OpenAI if available
+#     if has_openai:
+#         print("Testing OpenAI agent...")
+#         openai_agent = create_test_agent(prefer_provider="openai")
+#         openai_results = await LLMBehaviorTester.test_llm_behavior(openai_agent)
+#         results["OpenAI"] = openai_results
         
-    # Test AWS Nova if available
-    if has_aws_nova:
-        print("Testing AWS Nova agent...")
-        aws_agent = create_test_agent(prefer_provider="aws")
-        aws_results = await LLMBehaviorTester.test_llm_behavior(aws_agent)
-        results["AWS Nova"] = aws_results
+#     # Test AWS Nova if available
+#     if has_aws_nova:
+#         print("Testing AWS Nova agent...")
+#         aws_agent = create_test_agent(prefer_provider="aws")
+#         aws_results = await LLMBehaviorTester.test_llm_behavior(aws_agent)
+#         results["AWS Nova"] = aws_results
     
-    # All tested providers must pass
-    failed_providers = []
-    for provider, result in results.items():
-        if result["status"] != "PASSED":
-            failed_providers.append(f"{provider}: {result.get('failed_tests')}")
+#     # All tested providers must pass
+#     failed_providers = []
+#     for provider, result in results.items():
+#         if result["status"] != "PASSED":
+#             failed_providers.append(f"{provider}: {result.get('failed_tests')}")
     
-    assert not failed_providers, f"Some providers failed: {failed_providers}"
+#     assert not failed_providers, f"Some providers failed: {failed_providers}"
     
-    print(f"✅ Successfully tested {len(results)} provider(s): {', '.join(results.keys())}") 
+#     print(f"✅ Successfully tested {len(results)} provider(s): {', '.join(results.keys())}") 

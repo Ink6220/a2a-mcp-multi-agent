@@ -140,7 +140,7 @@ class BaseAgent(ABC):
 
 
     @abstractmethod
-    def parse_structure_output(self, text: str) -> Union[ResponseFormat, str]:
+    def _parse_to_response_format(self, data: Union[str, ResponseFormat]) -> ResponseFormat:
         """Parse structured output from text."""
         pass
 

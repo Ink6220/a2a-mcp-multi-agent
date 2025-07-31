@@ -76,7 +76,7 @@ class A2AOpenaiAgent(BaseAgent):
         """Check if the current model supports structured response_format using json_schema."""
         try:
             from litellm.utils import supports_response_schema
-            return supports_response_schema(model=self.litellm_model, custom_llm_provider="bedrock")
+            return supports_response_schema(model=self.litellm_model, custom_llm_provider="bedrock") #hardcoded to bedrock for now
         except Exception as e:
             logger.warning(f"Could not determine json_schema support for model {self.litellm_model}: {e}")
             return False  # safer default

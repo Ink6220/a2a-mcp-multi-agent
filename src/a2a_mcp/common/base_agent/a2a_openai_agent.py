@@ -84,19 +84,74 @@ class A2AOpenaiAgent(BaseAgent):
     def _parse_to_response_format(self, data: Union[str, ResponseFormat]) -> ResponseFormat:
         if isinstance(data, ResponseFormat):
             return data
-        try:
-            parsed = json.loads(data)
-            return ResponseFormat(**parsed)
-        except Exception as e:
-            logger.warning(f"Fallback to default ResponseFormat: {e}")
-            return ResponseFormat(
-                action="answer",
-                status="completed", # Hacky fix; might cause failures
-                message=str(data),
-                agent_names=None,
-                next_agent_instructions=None,
-                artifacts=None
-            )
+
+        # Helper function to try parsing JSON
+        def try_parse_json(text: str) -> Optional[Dict]:
+            try:
+                return json.loads(text)
+            except Exception:
+                return None
+
+        # If input is string, try various parsing strategies
+        if isinstance(data, str):
+            # Strategy 1: Direct JSON parse
+            parsed = try_parse_json(data)
+            if parsed:
+                try:
+                    return ResponseFormat(**parsed)
+                except Exception:
+                    pass
+
+            # Strategy 2: Strip markdown code blocks
+            if "```" in data:
+                # Extract content between ```json and ``` or just between ``` and ```
+                import re
+                code_block_pattern = r"```(?:json)?\s*([\s\S]*?)\s*```"
+                matches = re.findall(code_block_pattern, data)
+                
+                for match in matches:
+                    parsed = try_parse_json(match.strip())
+                    if parsed:
+                        try:
+                            return ResponseFormat(**parsed)
+                        except Exception:
+                            continue
+
+            # Strategy 3: Find JSON-like structure in text
+            # Look for patterns like {..."action": "answer"...} or {..."action":"answer"...}
+            import re
+            json_pattern = r"\{[^{]*\"action\"[\s]*:[\s]*\"(?:answer|call_next_agent)\"[^}]*\}"
+            matches = re.findall(json_pattern, data)
+            
+            for match in matches:
+                parsed = try_parse_json(match)
+                if parsed:
+                    try:
+                        return ResponseFormat(**parsed)
+                    except Exception:
+                        continue
+
+            # Strategy 4: Handle escaped JSON in artifacts
+            # Sometimes the JSON might be double-escaped due to being in artifacts
+            escaped_data = data.replace('\\"', '"').replace('\\\\', '\\')
+            if escaped_data != data:
+                parsed = try_parse_json(escaped_data)
+                if parsed:
+                    try:
+                        return ResponseFormat(**parsed)
+                    except Exception:
+                        pass
+
+        # Fallback: Return default response format with original text as message
+        logger.warning(f"All parsing strategies failed, falling back to default ResponseFormat")
+        return ResponseFormat(
+            action="answer",
+            status="completed",  # Hacky fix; might cause failures
+            message=str(data),
+            agent_names=None,
+            next_agent_instructions=None,
+            artifacts=None
+        )
 
         
 

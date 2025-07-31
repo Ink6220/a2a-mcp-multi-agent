@@ -32,8 +32,19 @@ This model standardizes the structure of responses returned by agents. It ensure
 **Validation:**
 *   Ensures `agent_name` and `next_agent_instruction` are provided if `action` is "call_next_agent".
 
+### 2. Unified Provider System (via LiteLLM)
+*   All agent implementations now use a single agent class (A2AOpenaiAgent) backed by a provider-agnostic architecture using LiteLLM. The provider is specified in the agent card and automatically handled at runtime.
 
-### 2. Usage Tracking Models (Pydantic)
+| Provider    | Integration Module         | Environment Variables Required                                  |
+| ----------- | -------------------------- | --------------------------------------------------------------- |
+| OpenAI      | `openai_integration.py`    | `OPENAI_API_KEY`                                                |
+| AWS Bedrock | `aws_integration.py`       | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION_NAME` |
+| Anthropic   | `anthropic_integration.py` | `ANTHROPIC_API_KEY`                                             |
+| Google      | `google_integration.py`    | `GOOGLE_API_KEY`                                                |
+
+
+
+### 3. Usage Tracking Models (Pydantic)
 
 These models are designed for detailed logging and tracking of agent activity, particularly API calls and token consumption.
 
@@ -54,7 +65,7 @@ These models are designed for detailed logging and tracking of agent activity, p
 
 The `current_time_utc7_str()` utility function provides timestamps for these records.
 
-### 3. `BaseAgent` (Abstract Base Class)
+### 4. `BaseAgent` (Abstract Base Class)
 
 This is the cornerstone of the framework. Developers must inherit from `BaseAgent` to create concrete agent implementations.
 

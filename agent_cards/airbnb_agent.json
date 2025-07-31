@@ -1,10 +1,10 @@
 {
     "name": "Airbnb Agent",
     "description": "Given locations, find the best Airbnb listing based off price and location",
-    "url": "http://localhost:10/",
+    "url": "http://localhost:10001/",
     "provider": {
-        "organization": "openai",
-        "url":"None"
+        "organization": "aws",
+        "url": "None"
     },
     "version": "1.0.0",
     "documentationUrl": null,
@@ -42,8 +42,10 @@
             "outputModes": null
         }
     ],
-    "modelName":"gpt-4.1-mini",
+    "modelName": "amazon.nova-lite-v1:0",
     "systemPrompt": "",
     "nextAgent": [],
-    "mcp_servers": ["airbnb"]
+    "mcp_servers": [
+        "airbnb"
+    ]
 }

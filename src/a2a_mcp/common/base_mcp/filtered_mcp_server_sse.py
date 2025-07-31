@@ -13,8 +13,8 @@ class FilteredMCPServerSse(MCPServerSse):
     def __init__(
         self,
         params: dict,
-        include_tools: list[str] = None,
-        exclude_tools: list[str] = None,
+        include_tools: list[str] | None = None,
+        exclude_tools: list[str] | None = None,
         cache_tools_list: bool = False,
         name: str | None = None,
     ):

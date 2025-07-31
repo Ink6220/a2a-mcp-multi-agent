@@ -18,6 +18,10 @@ from typing import Dict, Any, List
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', '..'))
 
 from src.a2a_mcp.common.base_agent.base_agent import ResponseFormat
+from src.a2a_mcp.common.base_agent.a2a_agent_selector import A2AAgentSelector
+from src.a2a_mcp.common.card_discovery import A2ACardDiscovery
+from src.a2a_mcp.common.types import CustomAgentCard
+from a2a.types import AgentProvider, AgentCapabilities, AgentSkill
 
 class LLMBehaviorTester:
     """Tests LLM agent state transitions and field relationships"""
@@ -36,7 +40,7 @@ class LLMBehaviorTester:
         },
         {
             "name": "Single Delegation State",
-            "query": "I need a JSON return, this can be done by the test-agent-2",
+            "query": "Ask test-agent-2 to do help query the database based off his system prompt",
             "expected_state": {
                 "action": "call_next_agent",
                 "status": "input_required",
@@ -191,6 +195,262 @@ class LLMBehaviorTester:
         results['status'] = 'PASSED' if len(results['failed_tests']) == 0 else 'FAILED'
         return results
 
+def create_test_agent_card(provider: str, model_name: str, agent_name: str) -> CustomAgentCard:
+    """Create a test agent card for the specified provider"""
+    return CustomAgentCard(
+        name=agent_name,
+        description=f"Test agent for protocol compliance ({provider})",
+        url="http://localhost:10101/",
+        provider=AgentProvider(
+            organization=provider,
+            url="None"
+        ),
+        version="1.0.0",
+        documentationUrl=None,
+        capabilities=AgentCapabilities(
+            streaming=True,
+            pushNotifications=True,
+            stateTransitionHistory=False
+        ),
+        defaultInputModes=["text", "text/plain"],
+        defaultOutputModes=["text", "text/plain"],
+        skills=[
+            AgentSkill(
+                id="tester",
+                name="Protocol Tester",
+                description="Tests A2A protocol compliance",
+                tags=["test", "protocol"],
+                examples=["Test the protocol compliance"],
+                inputModes=None,
+                outputModes=None
+            )
+        ],
+        modelName=model_name,
+        systemPrompt="""You are a test agent that validates A2A protocol compliance.
+
+## DISCOVERY
+Available agents:
+- test-agent-1: A simple test agent for basic tasks
+- test-agent-2: A more complex test agent for advanced tasks
+
+## CRITICAL DECISION RULES
+Before choosing an action, ask yourself:
+1. Am I responding directly to the user? → Use "answer"
+2. Am I asking the user a question? → Use "answer" 
+3. Am I reporting an error or failure? → Use "answer"
+4. Am I delegating a task to another agent from DISCOVERY? → Use "call_next_agent"
+
+## STRICT ACTION-STATUS PAIRING RULES
+**THESE RULES ARE MANDATORY AND CANNOT BE VIOLATED:**
+
+### Rule 1: call_next_agent = input_required ALWAYS
+- If action is "call_next_agent" → status MUST be "input_required"
+- You are NOT completing the task - you are waiting for another agent
+- NEVER use status "completed" with "call_next_agent"
+
+### Rule 2: answer + completed = YOU finished the task
+- If action is "answer" and status is "completed" → YOU have fully resolved the user's request
+- Use this ONLY when you provide the final answer yourself
+
+### Rule 3: answer + input_required = YOU need more info from USER
+- If action is "answer" and status is "input_required" → YOU need the USER to provide more information
+- Use this when asking the user questions
+
+### Rule 4: answer + failed = Error occurred
+- If action is "answer" and status is "failed" → An error occurred
+- Use this for error reporting
+
+## ACTION SPACE
+
+### [1] answer
+**Use this action when:**
+- Responding directly to the user
+- Asking the user for more information
+- Providing final answers or results
+- Reporting errors, failures, or completion status
+- ANY interaction with the user
+
+**Parameters:**
+- message (str): Your response to the user
+- artifacts (str): Optional structured JSON data to be passed as artifacts; must be JSON-serializable.
+
+**CORRECT Examples:**
+```json
+{
+  "action": "answer",
+  "status": "completed",
+  "message": "Here's the information you requested...",
+  "artifacts": null
+}
+```
+
+```json
+{
+  "action": "answer", 
+  "status": "input_required",
+  "message": "Could you please provide more details about your request?",
+  "artifacts": null
+}
+```
+
+```json
+{
+  "action": "answer",
+  "status": "failed", 
+  "message": "I encountered an error while processing your request.",
+  "artifacts": null
+}
+```
+
+```json
+{
+  "action": "answer",
+  "status": "completed",
+  "message": "Here is your requested data.",
+  "artifacts": "{\\"result\\": \\"success\\", \\"data\\": \\"mock_output\\"}"
+}
+```
+
+### [2] call_next_agent
+**Use this action ONLY when:**
+- Delegating tasks to agents listed in DISCOVERY section above
+- You have identified specific agents to handle the task
+- You are NOT asking the user anything
+- **CRITICAL: Status MUST ALWAYS be "input_required" - you are waiting for the other agent!**
+
+**REQUIRED Parameters:**
+- agent_names (list[str]): List of agent names from DISCOVERY (NEVER null, NEVER empty)
+- next_agent_instructions (list[str]): Instructions for each agent (NEVER null, must match agent_names length)
+- artifacts (str): Optional JSON data (can be null)
+
+**CORRECT Examples:**
+```json
+{
+  "action": "call_next_agent",
+  "status": "input_required",
+  "message": "I will delegate this task to test-agent-2",
+  "agent_names": ["test-agent-2"],
+  "next_agent_instructions": ["Please handle the customer inquiry about pricing"],
+  "artifacts": null
+}
+```
+
+```json
+{
+  "action": "call_next_agent",
+  "status": "input_required", 
+  "message": "I will delegate tasks to both agents",
+  "agent_names": ["test-agent-1", "test-agent-2"],
+  "next_agent_instructions": [
+    "Calculate the pricing for this customer",
+    "Check if there are any technical limitations"
+  ],
+  "artifacts": null
+}
+```
+
+**FORBIDDEN Examples (NEVER DO THIS):**
+```json
+{
+  "action": "call_next_agent",
+  "status": "completed",  // ❌ WRONG! NEVER use "completed" with delegation
+  "message": "Task delegated",
+  "agent_names": ["test-agent-1"],
+  "next_agent_instructions": ["Handle this"]
+}
+```
+
+## VALIDATION CHECKLIST
+Before responding, verify EVERY point:
+- ✅ If action is "answer": Include message field, artifacts optional
+- ✅ If action is "call_next_agent": Include agent_names (never null) and next_agent_instructions (never null, same length as agent_names)
+- ✅ If action is "call_next_agent": Status MUST be "input_required" (NEVER "completed")
+- ✅ If action is "answer" and status is "completed": I have fully resolved the user's request myself
+- ✅ Status is one of: "input_required", "completed", "failed"
+- ✅ Message explains what you're doing
+
+## FINAL ACTION-STATUS CHECK
+**Before submitting your response, ask yourself:**
+- Am I delegating? → action="call_next_agent", status="input_required"
+- Am I answering the user directly with final results? → action="answer", status="completed"  
+- Am I asking the user for more info? → action="answer", status="input_required"
+- Did an error occur? → action="answer", status="failed"
+
+Your task is to respond to queries in a way that tests different aspects of the A2A protocol:
+1. Basic answers with completed status
+2. Delegation to other agents
+3. Input required scenarios
+4. Error handling
+
+Set response status to input_required if the user needs to provide more information.
+Set response status to failed if there is an error while processing the request.
+Set response status to completed if the request is completed.""",
+        nextAgent=[]
+    )
+
+def create_openai_agent():
+    """Create OpenAI test agent"""
+    agent_card = create_test_agent_card("openai", "gpt-4o-mini", "OpenAI Test Agent")
+    card_discovery = A2ACardDiscovery(agent_card=agent_card)
+    selector = A2AAgentSelector(agent_card=agent_card, card_discovery=card_discovery)
+    return selector.get_agent()
+
+def create_aws_agent():
+    """Create AWS test agent"""
+    agent_card = create_test_agent_card("aws", "amazon.nova-lite-v1:0", "AWS Test Agent")
+    card_discovery = A2ACardDiscovery(agent_card=agent_card)
+    selector = A2AAgentSelector(agent_card=agent_card, card_discovery=card_discovery)
+    return selector.get_agent()
+
+def is_provider_available(provider: str) -> bool:
+    """Check if a provider is available based on environment variables"""
+    if provider == "openai":
+        return bool(os.getenv("OPENAI_API_KEY"))
+    elif provider == "aws":
+        return all([
+            os.getenv("AWS_ACCESS_KEY_ID"),
+            os.getenv("AWS_SECRET_ACCESS_KEY"),
+            os.getenv("AWS_REGION_NAME")
+        ])
+    return False
+
+async def test_provider_comparison():
+    """Test and compare OpenAI and AWS agents"""
+    print("\n🔄 Provider Comparison Test")
+    print("=" * 50)
+    
+    results = {}
+    
+    # Test OpenAI if available
+    if is_provider_available("openai"):
+        print("\n🧪 Testing OpenAI Agent")
+        openai_agent = create_openai_agent()
+        print(f"🔧 Original Model: {openai_agent.model_name}")
+        print(f"🌐 LiteLLM Model: {openai_agent.litellm_model}")
+        results["OpenAI"] = await LLMBehaviorTester.test_llm_behavior(openai_agent)
+    else:
+        print("\n⚠️  OpenAI not available (missing OPENAI_API_KEY)")
+        
+    # Test AWS if available
+    if is_provider_available("aws"):
+        print("\n🧪 Testing AWS Agent")
+        aws_agent = create_aws_agent()
+        print(f"🔧 Original Model: {aws_agent.model_name}")
+        print(f"🌐 LiteLLM Model: {aws_agent.litellm_model}")
+        results["AWS"] = await LLMBehaviorTester.test_llm_behavior(aws_agent)
+    else:
+        print("\n⚠️  AWS not available (missing AWS credentials)")
+    
+    # Print comparison results
+    print("\n📊 Provider Comparison Results")
+    print("=" * 50)
+    
+    for provider, result in results.items():
+        status_emoji = "✅" if result['status'] == 'PASSED' else "❌"
+        print(f"{status_emoji} {provider}: {result['passed_tests']}/{result['total_tests']} tests passed")
+    
+    return results
+
 def print_behavior_report(results: Dict[str, Any]) -> None:
     """Print formatted behavioral test results"""
     print("\n🧪 LLM STATE VALIDATION REPORT\n" + "="*50)
@@ -228,13 +488,29 @@ async def main():
     print("🧪 LLM State Validation Suite")
     print("="*50)
     
-    # Import your LLM agent here
-    # agent = YourLLMAgent()
-    # results = await LLMBehaviorTester.test_llm_behavior(agent)
-    # print_behavior_report(results)
+    # Run provider comparison tests
+    results = await test_provider_comparison()
     
-    print("\n⚠️  Please import your LLM agent and uncomment the test code")
-    return True
+    # Print detailed reports for each provider
+    for provider, result in results.items():
+        print(f"\n{'='*20} {provider} DETAILED REPORT {'='*20}")
+        print_behavior_report(result)
+    
+    # Overall summary
+    print(f"\n{'='*20} OVERALL SUMMARY {'='*20}")
+    all_passed = all(result['status'] == 'PASSED' for result in results.values())
+    total_providers = len(results)
+    passed_providers = sum(1 for result in results.values() if result['status'] == 'PASSED')
+    
+    print(f"Providers tested: {total_providers}")
+    print(f"Providers passed: {passed_providers}")
+    
+    if all_passed:
+        print("🎉 All available providers passed all tests!")
+        return True
+    else:
+        print("⚠️  Some providers had test failures. Check detailed reports above.")
+        return False
 
 if __name__ == "__main__":
-    asyncio.run(main()) 
+    success = asyncio.run(main()) 

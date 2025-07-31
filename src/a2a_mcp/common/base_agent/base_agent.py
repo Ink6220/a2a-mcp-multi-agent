@@ -94,8 +94,9 @@ class Usage(BaseModel):
     timestamp: str = Field(default_factory=current_time_utc7_str)
 
 class BaseAgent(ABC):
-    def __init__(self, model_name: str, agent_card: CustomAgentCard, card_discovery: A2ACardDiscovery):
-        self.model_name = model_name
+    def __init__(self, model_name: str, agent_card: CustomAgentCard, card_discovery: A2ACardDiscovery, litellm_model: Optional[str] = None):
+        self.model_name = model_name  # Original model name from agent card
+        self.litellm_model = litellm_model or model_name  # LiteLLM-formatted model string
         self.agent_card: CustomAgentCard = agent_card
         self._usage_logs: Dict[str, Usage] = {}
 
@@ -139,7 +140,7 @@ class BaseAgent(ABC):
 
 
     @abstractmethod
-    def parse_structure_output(self, text: str) -> Union[ResponseFormat, str]:
+    def _parse_to_response_format(self, data: Union[str, ResponseFormat]) -> ResponseFormat:
         """Parse structured output from text."""
         pass
 
@@ -289,6 +290,8 @@ class BaseAgent(ABC):
         print(f"Context ID: {usage.context_id}")
         print(f"Task ID: {usage.task_id}")
         print(f"Model: {usage.model_name}")
+        if hasattr(self, 'litellm_model') and self.litellm_model != self.model_name:
+            print(f"LiteLLM Model: {self.litellm_model}")
         print(f"Prompt Tokens: {usage.prompt_tokens}")
         print(f"Completion Tokens: {usage.completion_tokens}")
         if usage.extra_usage:

@@ -97,6 +97,13 @@ Available agents:
 - test-agent-1: A simple test agent for basic tasks
 - test-agent-2: A more complex test agent for advanced tasks
 
+## RESPONSE FORMAT RULES
+**CRITICAL: YOU MUST FOLLOW THESE RULES:**
+1. Return ONLY raw JSON - no markdown formatting, no triple backticks
+2. Do not wrap the JSON in ```json or ``` blocks
+3. Do not add any text before or after the JSON
+4. The response must be valid JSON that can be parsed directly
+
 ## CRITICAL DECISION RULES
 Before choosing an action, ask yourself:
 1. Am I responding directly to the user? → Use "answer"
@@ -138,42 +145,34 @@ Before choosing an action, ask yourself:
 - message (str): Your response to the user
 - artifacts (str): Optional structured JSON data to be passed as artifacts; must be JSON-serializable.
 
-**CORRECT Examples:**
-```json
-{
+**CORRECT Examples (return exactly like this - no markdown):**
+{{
   "action": "answer",
   "status": "completed",
   "message": "Here's the information you requested...",
   "artifacts": null
-}
-```
+}}
 
-```json
-{
+{{
   "action": "answer", 
   "status": "input_required",
   "message": "Could you please provide more details about your request?",
   "artifacts": null
-}
-```
+}}
 
-```json
-{
+{{
   "action": "answer",
   "status": "failed", 
   "message": "I encountered an error while processing your request.",
   "artifacts": null
-}
-```
+}}
 
-```json
-{
+{{
   "action": "answer",
   "status": "completed",
   "message": "Here is your requested data.",
   "artifacts": "{\\"result\\": \\"success\\", \\"data\\": \\"mock_output\\"}"
-}
-```
+}}
 
 ### [2] call_next_agent
 **Use this action ONLY when:**
@@ -187,20 +186,17 @@ Before choosing an action, ask yourself:
 - next_agent_instructions (list[str]): Instructions for each agent (NEVER null, must match agent_names length)
 - artifacts (str): Optional JSON data (can be null)
 
-**CORRECT Examples:**
-```json
-{
+**CORRECT Examples (return exactly like this - no markdown):**
+{{
   "action": "call_next_agent",
   "status": "input_required",
   "message": "I will delegate this task to test-agent-2",
   "agent_names": ["test-agent-2"],
   "next_agent_instructions": ["Please handle the customer inquiry about pricing"],
   "artifacts": null
-}
-```
+}}
 
-```json
-{
+{{
   "action": "call_next_agent",
   "status": "input_required", 
   "message": "I will delegate tasks to both agents",
@@ -210,22 +206,22 @@ Before choosing an action, ask yourself:
     "Check if there are any technical limitations"
   ],
   "artifacts": null
-}
-```
+}}
 
 **FORBIDDEN Examples (NEVER DO THIS):**
-```json
-{
+{{
   "action": "call_next_agent",
   "status": "completed",  // ❌ WRONG! NEVER use "completed" with delegation
   "message": "Task delegated",
   "agent_names": ["test-agent-1"],
   "next_agent_instructions": ["Handle this"]
-}
-```
+}}
 
 ## VALIDATION CHECKLIST
 Before responding, verify EVERY point:
+- ✅ Response is raw JSON without any markdown formatting
+- ✅ No ```json or ``` blocks around the response
+- ✅ No text before or after the JSON
 - ✅ If action is "answer": Include message field, artifacts optional
 - ✅ If action is "call_next_agent": Include agent_names (never null) and next_agent_instructions (never null, same length as agent_names)
 - ✅ If action is "call_next_agent": Status MUST be "input_required" (NEVER "completed")
